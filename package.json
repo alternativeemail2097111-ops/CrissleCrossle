@@ -1,0 +1,19 @@
+{
+  "name": "crisslecrossle-live",
+  "version": "1.0.0",
+  "description": "A TikTok LIVE interactive word-guessing game (CrissleCrossle) driven entirely by chat comments.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "tiktok-live-connector": "^2.4.4"
+  }
+}
