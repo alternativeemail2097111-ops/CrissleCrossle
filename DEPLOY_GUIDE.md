@@ -104,7 +104,12 @@ redeploys automatically — you never have to repeat these steps.
 
 ## Part 4 — Using the game
 
-Open your Render URL. You'll see:
+Open your Render URL. Tap **❓ How to Play** in the top bar any time — it
+explains the rules with a live worked example built right into the game
+(no external images needed), so you never have to re-explain the decoy-word
+trick from scratch.
+
+You'll also see:
 
 - A **diagnostics pill** in the top-right corner (tap it to expand). This
   is your "is it actually working" panel — it shows a live count of chat
@@ -141,11 +146,16 @@ Open your Render URL. You'll see:
 5. Tap **Start Round** to begin. Tell your viewers to type a 5-letter word
    guess **by itself** in the comments (just `APPLE`, not "I think it's
    apple!") — that's the most reliable way for the game to recognize it.
-6. Use **Give Hint** any time you want to help viewers along, **Skip** to
-   abandon a round early, or **Reveal Answer** to end it immediately.
-7. Use the **Say / Test** box at the bottom to type something yourself —
-   it appears in the feed as "HOST" and can also double as a way to
-   privately test a guess without waiting for a viewer.
+   Guessing is unlimited — viewers can guess as many times as they want,
+   and only real dictionary words get tested and added to the board.
+6. Use **Hint** any time you want to help viewers along, **Skip** to
+   abandon a round early, or **Reveal** to end it immediately.
+7. The next round starts automatically 3 seconds after one ends — change
+   the **Next round** dropdown in Round Control if you'd rather give more
+   breathing room between rounds.
+8. Use the **Host Say** box to type something yourself — it appears in the
+   feed as "HOST" and can also double as a way to privately test a guess
+   without waiting for a viewer.
 
 ### Screen-sharing this during your broadcast
 

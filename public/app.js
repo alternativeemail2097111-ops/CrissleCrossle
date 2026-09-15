@@ -8,10 +8,9 @@
   'use strict';
 
   // --------------------------------------------------------------------
-  // Requirement #7: real mobile viewport height, not raw 100vh.
-  // Mobile browser chrome (address bar, etc.) makes 100vh lie about how
-  // much space is actually visible. We measure window.innerHeight and
-  // re-measure on resize/orientation change/keyboard open.
+  // Mobile viewport height fix: measure the REAL visible height instead
+  // of trusting raw 100vh, which lies on mobile browsers because of the
+  // address bar. Re-measured on resize/orientation change.
   // --------------------------------------------------------------------
   function setAppHeight() {
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
@@ -65,21 +64,25 @@
   const hintBtn = el('hintBtn');
   const revealBtn = el('revealBtn');
   const difficultySelect = el('difficultySelect');
+  const nextRoundDelaySelect = el('nextRoundDelaySelect');
   const resetLeaderboardBtn = el('resetLeaderboardBtn');
 
   const hostSayInput = el('hostSayInput');
   const hostSayBtn = el('hostSayBtn');
 
+  const howToPlayBtn = el('howToPlayBtn');
+  const howToPlayModal = el('howToPlayModal');
+  const howToPlayClose = el('howToPlayClose');
+
+  const MAX_DISPLAYED_ROWS = 60; // unlimited guesses server-side; the board only *renders* the most recent N for a smooth UI
+
   // --------------------------------------------------------------------
   // Diagnostics ribbon toggle
   // --------------------------------------------------------------------
-  diagToggle.addEventListener('click', () => {
-    diagPanel.classList.toggle('hidden');
-  });
+  diagToggle.addEventListener('click', () => diagPanel.classList.toggle('hidden'));
 
   // --------------------------------------------------------------------
-  // Host control bar collapse/expand drawer (mobile only - CSS makes the
-  // handle invisible on wider screens where the bar is always fully shown).
+  // Host control bar collapse/expand drawer (mobile only)
   // --------------------------------------------------------------------
   hostBarHandle.addEventListener('click', () => {
     const expanded = hostBar.classList.toggle('expanded');
@@ -87,11 +90,49 @@
   });
 
   // --------------------------------------------------------------------
+  // How to Play modal
+  // --------------------------------------------------------------------
+  function openHowToPlay() {
+    howToPlayModal.classList.remove('hidden');
+  }
+  function closeHowToPlay() {
+    howToPlayModal.classList.add('hidden');
+  }
+  howToPlayBtn.addEventListener('click', openHowToPlay);
+  howToPlayClose.addEventListener('click', closeHowToPlay);
+  howToPlayModal.addEventListener('click', (e) => {
+    if (e.target === howToPlayModal) closeHowToPlay();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeHowToPlay();
+  });
+
+  // Build the worked example in the modal using the SAME tile markup as the
+  // real board, so it's a live, on-brand example rather than a static image.
+  (function buildExample() {
+    const guessTiles = el('exampleGuessTiles');
+    const decoyTiles = el('exampleDecoyTiles');
+    const guess = ['c', 'l', 'a', 'i', 'm'];
+    const guessColors = ['green', 'yellow', 'grey', 'yellow', 'green'];
+    const decoy = ['c', 'r', 'i', 'm', 'e'];
+    guess.forEach((letter, i) => {
+      const t = document.createElement('div');
+      t.className = `tile tile-${guessColors[i]}`;
+      t.textContent = letter;
+      guessTiles.appendChild(t);
+    });
+    decoy.forEach((letter) => {
+      const t = document.createElement('div');
+      t.className = 'tile tile-decoy';
+      t.textContent = letter;
+      decoyTiles.appendChild(t);
+    });
+  })();
+
+  // --------------------------------------------------------------------
   // Socket.io connection
   // --------------------------------------------------------------------
   const socket = io();
-
-  let lastKnownRound = null;
 
   socket.on('state:full', (state) => {
     renderDiagnostics(state.diagnostics);
@@ -100,6 +141,9 @@
     diagSignKey.textContent = state.signKeyConfigured ? 'yes ✅' : 'NO ⚠️ (see setup step 4)';
     testModeToggle.checked = !!state.testModeActive;
     if (state.game && state.game.difficultyKey) difficultySelect.value = state.game.difficultyKey;
+    if (state.game && state.game.nextRoundDelayMs) {
+      nextRoundDelaySelect.value = String(Math.round(state.game.nextRoundDelayMs / 1000));
+    }
   });
 
   socket.on('game:update', renderGame);
@@ -108,7 +152,7 @@
   socket.on('testMode:status', (s) => { testModeToggle.checked = !!s.active; });
   socket.on('chat:new', appendChatLine);
 
-  socket.on('connect_error', (err) => {
+  socket.on('connect_error', () => {
     diagSummary.textContent = 'Cannot reach the server socket. Reload the page.';
   });
 
@@ -119,7 +163,7 @@
     if (!d) return;
     diagEvents.textContent = d.eventsReceived;
     diagRecognized.textContent = d.recognizedCount;
-    diagSummary.textContent = `Events: ${d.eventsReceived} · Recognized: ${d.recognizedCount}`;
+    diagSummary.textContent = `Events: ${d.eventsReceived} · Accepted: ${d.recognizedCount}`;
 
     if (d.lastReceived) {
       const { username, text, source } = d.lastReceived;
@@ -127,18 +171,12 @@
     }
 
     if (d.rawSamples && d.rawSamples.length) {
-      diagRawSamples.textContent = d.rawSamples
-        .map((s) => `--- ${s.eventName} ---\n${s.text}`)
-        .join('\n\n');
+      diagRawSamples.textContent = d.rawSamples.map((s) => `--- ${s.eventName} ---\n${s.text}`).join('\n\n');
     }
 
-    if (d.errors && d.errors.length) {
-      diagErrors.textContent = d.errors
-        .map((e) => `[${new Date(e.ts).toLocaleTimeString()}] ${e.context}: ${e.message}`)
-        .join('\n');
-    } else {
-      diagErrors.textContent = 'No errors logged.';
-    }
+    diagErrors.textContent = d.errors && d.errors.length
+      ? d.errors.map((e) => `[${new Date(e.ts).toLocaleTimeString()}] ${e.context}: ${e.message}`).join('\n')
+      : 'No errors logged.';
 
     if (d.connection) renderTiktokStatus(d.connection);
   }
@@ -158,8 +196,7 @@
     if (empty) empty.remove();
 
     const line = document.createElement('div');
-    const classes = ['chat-line', `source-${msg.source}`];
-    line.className = classes.join(' ');
+    line.className = `chat-line source-${msg.source}`;
     const userSpan = document.createElement('span');
     userSpan.className = 'cu';
     userSpan.textContent = msg.username + ': ';
@@ -167,9 +204,7 @@
     line.appendChild(document.createTextNode(msg.text));
     chatFeed.appendChild(line);
 
-    while (chatFeed.children.length > MAX_CHAT_LINES) {
-      chatFeed.removeChild(chatFeed.firstChild);
-    }
+    while (chatFeed.children.length > MAX_CHAT_LINES) chatFeed.removeChild(chatFeed.firstChild);
     chatFeed.scrollTop = chatFeed.scrollHeight;
   }
 
@@ -177,6 +212,13 @@
   // Game state rendering
   // --------------------------------------------------------------------
   let tickerInterval = null;
+  // Fingerprint of the last attempts array we actually rendered, so a
+  // broadcast that doesn't change the attempts (e.g. a difficulty change)
+  // never rebuilds - and re-triggers CSS animations on - tiles that were
+  // already on screen. This is the fix for the "letters keep flickering"
+  // bug: previously the board was fully rebuilt on every state push.
+  let lastRenderedRoundNumber = null;
+  let lastRenderedAttemptCount = 0;
 
   function renderGame(game) {
     if (!game) return;
@@ -187,7 +229,6 @@
     renderLeaderboard(game.leaderboard || []);
 
     const round = game.round;
-    lastKnownRound = round;
 
     if (!round) {
       boardEmpty.classList.remove('hidden');
@@ -197,32 +238,53 @@
       stopTicker();
       timerText.textContent = '--';
       timerBar.style.width = '0%';
+      lastRenderedRoundNumber = null;
+      lastRenderedAttemptCount = 0;
       return;
     }
 
     boardEmpty.classList.add('hidden');
-    renderBoard(round);
+
+    const isNewRound = round.number !== lastRenderedRoundNumber;
+    const attemptCountChanged = round.attempts.length !== lastRenderedAttemptCount;
+
+    // Only touch the board DOM when the round changed or new attempts came
+    // in - never on an unrelated broadcast (difficulty change, settings
+    // change, etc.), so existing tiles are never re-animated needlessly.
+    if (isNewRound || attemptCountChanged) {
+      renderBoard(round, isNewRound);
+      lastRenderedRoundNumber = round.number;
+      lastRenderedAttemptCount = round.attempts.length;
+    }
+
     renderHints(round);
     renderBanner(round);
     startTicker(round);
   }
 
-  function renderBoard(round) {
-    // Simple full re-render - attempt counts per round are small (<= 12),
-    // so this stays cheap and keeps the code easy to reason about.
-    board.querySelectorAll('.attempt-row').forEach((n) => n.remove());
-
-    // Newest attempt first, so the most recent action is always visible
-    // without needing to scroll on a small phone screen.
-    const attempts = [...round.attempts].reverse();
-    for (const attempt of attempts) {
-      board.appendChild(buildAttemptRow(attempt));
+  function renderBoard(round, fullRebuild) {
+    if (fullRebuild) {
+      board.querySelectorAll('.attempt-row').forEach((n) => n.remove());
+      const attempts = round.attempts.slice(-MAX_DISPLAYED_ROWS).reverse();
+      for (const attempt of attempts) board.appendChild(buildAttemptRow(attempt, false));
+      return;
+    }
+    // Same round, just new attempt(s): insert only the new rows at the top
+    // instead of rebuilding everything, so existing tiles are never
+    // recreated (and never re-trigger their entrance animation).
+    const freshOnes = round.attempts.slice(lastRenderedAttemptCount);
+    for (const attempt of freshOnes.slice().reverse()) {
+      board.insertBefore(buildAttemptRow(attempt, true), board.firstChild);
+    }
+    // Trim overly long boards for performance.
+    while (board.querySelectorAll('.attempt-row').length > MAX_DISPLAYED_ROWS) {
+      board.removeChild(board.lastChild);
     }
   }
 
-  function buildAttemptRow(attempt) {
+  function buildAttemptRow(attempt, animateIn) {
     const row = document.createElement('div');
-    row.className = 'attempt-row';
+    row.className = 'attempt-row' + (attempt.correct ? ' attempt-correct' : '');
 
     const userDiv = document.createElement('div');
     userDiv.className = 'attempt-user';
@@ -233,7 +295,7 @@
     guessSet.className = 'tile-set';
     for (let i = 0; i < attempt.guess.length; i++) {
       const tile = document.createElement('div');
-      tile.className = `tile tile-${attempt.colors[i]}`;
+      tile.className = `tile tile-${attempt.colors[i]}` + (animateIn ? ' tile-new' : '');
       tile.textContent = attempt.guess[i];
       guessSet.appendChild(tile);
     }
@@ -243,7 +305,7 @@
     decoySet.className = 'tile-set';
     for (let i = 0; i < attempt.decoy.length; i++) {
       const tile = document.createElement('div');
-      tile.className = 'tile tile-decoy';
+      tile.className = 'tile tile-decoy' + (animateIn ? ' tile-new' : '');
       tile.textContent = attempt.decoy[i];
       decoySet.appendChild(tile);
     }
@@ -269,19 +331,39 @@
     }
   }
 
+  let lastBannerStatus = null;
   function renderBanner(round) {
     if (round.status === 'active') {
       roundBanner.classList.add('hidden');
+      lastBannerStatus = null;
       return;
     }
+    const changed = lastBannerStatus !== `${round.number}:${round.status}`;
     roundBanner.classList.remove('hidden');
+
     if (round.status === 'solved') {
       roundBanner.className = 'round-banner win';
       roundBanner.textContent = `🎉 ${round.solvedBy} solved it! The word was "${(round.revealAnswer || '').toUpperCase()}" (+${round.solveBonus} pts). Next round starting soon…`;
+      if (changed) fireConfetti();
     } else {
       roundBanner.className = 'round-banner lose';
-      const reason = round.status === 'timeout' ? 'Time ran out!' : round.status === 'exhausted' ? 'Out of attempts!' : 'Round ended.';
+      const reason = round.status === 'timeout' ? 'Time ran out!' : 'Round ended.';
       roundBanner.textContent = `${reason} The word was "${(round.revealAnswer || '').toUpperCase()}". Next round starting soon…`;
+    }
+    lastBannerStatus = `${round.number}:${round.status}`;
+  }
+
+  function fireConfetti() {
+    const colors = ['#ff3f9e', '#8a5cff', '#2fd4ff', '#4fae5c', '#dbb23e'];
+    for (let i = 0; i < 18; i++) {
+      const piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      piece.style.left = Math.random() * 100 + '%';
+      piece.style.background = colors[i % colors.length];
+      piece.style.animationDelay = Math.random() * 0.3 + 's';
+      piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+      roundBanner.appendChild(piece);
+      setTimeout(() => piece.remove(), 2200);
     }
   }
 
@@ -305,6 +387,7 @@
       const remainingMs = Math.max(0, round.nextRoundAt - Date.now());
       timerBar.style.width = '100%';
       timerText.textContent = `next in ${Math.ceil(remainingMs / 1000)}s`;
+      if (remainingMs <= 0) stopTicker();
     } else {
       timerText.textContent = '--';
     }
@@ -322,6 +405,7 @@
       leaderboardList.appendChild(li);
       return;
     }
+    const medals = ['🥇', '🥈', '🥉'];
     top.forEach((entry, i) => {
       const li = document.createElement('li');
       if (i === 0) li.classList.add('top1');
@@ -329,7 +413,7 @@
       if (i === 2) li.classList.add('top3');
       const rank = document.createElement('span');
       rank.className = 'rank';
-      rank.textContent = `${i + 1}.`;
+      rank.textContent = medals[i] || `${i + 1}.`;
       const name = document.createElement('span');
       name.textContent = entry.username;
       const score = document.createElement('span');
@@ -349,10 +433,7 @@
   // --------------------------------------------------------------------
   connectBtn.addEventListener('click', () => {
     const username = tiktokUsernameInput.value.trim();
-    if (!username) {
-      tiktokUsernameInput.focus();
-      return;
-    }
+    if (!username) { tiktokUsernameInput.focus(); return; }
     socket.emit('tiktok:connect', { username });
   });
 
@@ -376,6 +457,10 @@
     socket.emit('host:setDifficulty', { key: difficultySelect.value });
   });
 
+  nextRoundDelaySelect.addEventListener('change', () => {
+    socket.emit('host:setNextRoundDelay', { seconds: Number(nextRoundDelaySelect.value) });
+  });
+
   function sendHostSay() {
     const text = hostSayInput.value.trim();
     if (!text) return;
@@ -384,12 +469,8 @@
     hostSayInput.focus();
   }
   hostSayBtn.addEventListener('click', sendHostSay);
-  hostSayInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') sendHostSay();
-  });
-  tiktokUsernameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') connectBtn.click();
-  });
+  hostSayInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendHostSay(); });
+  tiktokUsernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connectBtn.click(); });
 
   // --------------------------------------------------------------------
   // Small helpers

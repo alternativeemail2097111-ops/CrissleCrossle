@@ -23,7 +23,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 
-import { GameEngine, DIFFICULTIES, PLAYABLE_WORDS } from './game/engine.js';
+import { GameEngine, DIFFICULTIES, PLAYABLE_WORDS, NEXT_ROUND_DELAY_OPTIONS } from './game/engine.js';
 import { Diagnostics } from './game/diagnostics.js';
 import { TikTokManager } from './game/tiktok.js';
 import { TestModeSimulator } from './game/testMode.js';
@@ -113,6 +113,7 @@ function buildFullState() {
     tiktokStatus: diagnostics.connection,
     testModeActive,
     difficulties: DIFFICULTIES,
+    nextRoundDelayOptions: NEXT_ROUND_DELAY_OPTIONS,
     signKeyConfigured: !!SIGN_API_KEY,
   };
 }
@@ -259,6 +260,15 @@ io.on('connection', (socket) => {
       if (key) engine.setDifficulty(key);
     } catch (err) {
       diagnostics.logError('socket.host:setDifficulty', err);
+    }
+  });
+
+  socket.on('host:setNextRoundDelay', (payload) => {
+    try {
+      const seconds = payload && payload.seconds;
+      if (seconds) engine.setNextRoundDelay(seconds);
+    } catch (err) {
+      diagnostics.logError('socket.host:setNextRoundDelay', err);
     }
   });
 

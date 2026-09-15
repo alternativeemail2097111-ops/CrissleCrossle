@@ -7,23 +7,28 @@
 // TikTok viewer or from the built-in simulator.
 // ============================================================================
 
-import { WORDS } from './words.js';
+import { WORDS, isKnownWord } from './words.js';
 
 const WORD_LENGTH = 5;
 
-// Difficulty presets. Full authorization was given on tuning these -
-// they were chosen to keep a live chat moving at a good pace.
+// Difficulty presets. Guessing is unlimited at every level - difficulty
+// only tunes how long a round runs for and how often free hints appear.
 export const DIFFICULTIES = {
-  easy: { label: 'Easy', maxAttempts: 12, roundSeconds: 150, hintEvery: 3 },
-  normal: { label: 'Normal', maxAttempts: 9, roundSeconds: 110, hintEvery: 3 },
-  hard: { label: 'Hard', maxAttempts: 6, roundSeconds: 80, hintEvery: 4 },
+  easy: { label: 'Easy', roundSeconds: 180, hintEvery: 5 },
+  normal: { label: 'Normal', roundSeconds: 120, hintEvery: 4 },
+  hard: { label: 'Hard', roundSeconds: 75, hintEvery: 6 },
 };
 
+// How long after a round ends before the next one auto-starts. Defaults to
+// 3 seconds per the host's chosen default; adjustable live via
+// setNextRoundDelay() / the host panel's "Next round" selector.
+export const NEXT_ROUND_DELAY_OPTIONS = [3, 5, 10, 15, 30, 60];
+const DEFAULT_NEXT_ROUND_DELAY_MS = 3000;
+
 const SOLVE_BASE_SCORE = 100;
-const SOLVE_SCORE_STEP = 8;
-const SOLVE_SCORE_MIN = 20;
+const SOLVE_SCORE_STEP = 6;
+const SOLVE_SCORE_MIN = 25;
 const PARTICIPATION_SCORE = 2;
-const NEXT_ROUND_DELAY_MS = 9000;
 
 /**
  * Classic Wordle-style two-pass color comparison of `guess` against a single
@@ -137,6 +142,15 @@ export function extractGuessWord(text) {
   return candidate;
 }
 
+/**
+ * Requirement: unlimited guesses, but only guesses that are an actual "fit"
+ * (a real word from our dictionary) get tested and added to the board.
+ * Random keyboard-mash or a 5-letter non-word never becomes a row.
+ */
+export function isAcceptableGuess(word) {
+  return isKnownWord(word);
+}
+
 function scoreForSolve(attemptCountIncludingSolve) {
   const score = SOLVE_BASE_SCORE - SOLVE_SCORE_STEP * (attemptCountIncludingSolve - 1);
   return Math.max(SOLVE_SCORE_MIN, score);
@@ -156,6 +170,7 @@ export class GameEngine {
     this.roundNumber = 0;
     this.tickTimer = null;
     this._nextRoundAt = null;
+    this.nextRoundDelayMs = DEFAULT_NEXT_ROUND_DELAY_MS;
   }
 
   get difficulty() {
@@ -168,6 +183,14 @@ export class GameEngine {
     this.onChange('difficulty');
   }
 
+  /** Host-adjustable delay (in whole seconds) before the next round auto-starts. */
+  setNextRoundDelay(seconds) {
+    const n = Number(seconds);
+    if (!Number.isFinite(n) || n < 1 || n > 600) return;
+    this.nextRoundDelayMs = Math.round(n * 1000);
+    this.onChange('settings');
+  }
+
   /** Starts a fresh round, replacing any round currently in progress. */
   startRound() {
     this._clearTimers();
@@ -176,8 +199,7 @@ export class GameEngine {
     this.round = {
       number: this.roundNumber,
       answer: pickWord(),
-      attempts: [], // { username, guess, colors, decoy, ts }
-      maxAttempts: d.maxAttempts,
+      attempts: [], // { username, guess, colors, decoy, ts } - unlimited length
       hintEvery: d.hintEvery,
       hints: [], // revealed positions, e.g. [{ index, letter }]
       solved: false,
@@ -185,7 +207,7 @@ export class GameEngine {
       startedAt: Date.now(),
       endsAt: Date.now() + d.roundSeconds * 1000,
       participants: new Set(),
-      status: 'active', // active | solved | timeout | exhausted | skipped | revealed
+      status: 'active', // active | solved | timeout | skipped | revealed
       revealAnswer: null, // set when round ends
     };
     this._nextRoundAt = null;
@@ -224,24 +246,28 @@ export class GameEngine {
     hints.push({ index: idx, letter: answer[idx] });
   }
 
+  // NOTE: this fires every second but deliberately does NOT call onChange()
+  // for the common case. onChange() triggers a full state broadcast, which
+  // the browser used to turn into a full board re-render every second -
+  // that's what caused every tile to flicker non-stop. The on-screen
+  // countdown is computed independently on the client from `endsAt`
+  // (see public/app.js), so this timer only needs to broadcast when
+  // something actually changes: a round ending or the next one starting.
   _tick() {
     if (!this.round) return;
     if (this.round.status === 'active') {
       if (Date.now() >= this.round.endsAt) {
         this._endRound('timeout');
-        return;
       }
     } else if (this._nextRoundAt && Date.now() >= this._nextRoundAt) {
       this.startRound();
-      return;
     }
-    this.onChange('tick');
   }
 
   _endRound(status) {
     this.round.status = status;
     this.round.revealAnswer = this.round.answer;
-    this._nextRoundAt = Date.now() + NEXT_ROUND_DELAY_MS;
+    this._nextRoundAt = Date.now() + this.nextRoundDelayMs;
     this.onChange('roundEnd');
   }
 
@@ -283,7 +309,11 @@ export class GameEngine {
     const guess = extractGuessWord(rawText);
     if (!guess) return { recognized: false };
     if (!this.round || this.round.status !== 'active') return { recognized: false, reason: 'no-active-round' };
-    if (this.round.attempts.length >= this.round.maxAttempts) return { recognized: false, reason: 'round-full' };
+
+    // Unlimited guessing, but only a real dictionary word is "fit" enough
+    // to be tested against the answer and added to the board. A 5-letter
+    // non-word is quietly ignored rather than wasting a board row.
+    if (!isAcceptableGuess(guess)) return { recognized: false, reason: 'not-a-word' };
 
     const decoy = pickWord([this.round.answer, guess]);
     const colors = computeRowColors(guess, this.round.answer, decoy);
@@ -318,14 +348,10 @@ export class GameEngine {
       return { recognized: true, correct: true, bonus };
     }
 
-    // Reveal a hint every N attempts.
+    // Reveal a hint every N attempts (unlimited guessing means this is the
+    // only thing that paces the round besides the clock).
     if (this.round.attempts.length % this.round.hintEvery === 0) {
       this._revealNextHint();
-    }
-
-    if (this.round.attempts.length >= this.round.maxAttempts) {
-      this._endRound('exhausted');
-      return { recognized: true, correct: false, roundOver: true };
     }
 
     this.onChange('attempt');
@@ -340,11 +366,11 @@ export class GameEngine {
       roundNumber: this.roundNumber,
       difficultyKey: this.difficultyKey,
       difficulty: this.difficulty,
+      nextRoundDelayMs: this.nextRoundDelayMs,
       leaderboard: this.getLeaderboardTop(10),
       round: r && {
         number: r.number,
         attempts: r.attempts,
-        maxAttempts: r.maxAttempts,
         hints: r.hints,
         wordLength: WORD_LENGTH,
         solved: r.solved,
@@ -360,4 +386,4 @@ export class GameEngine {
   }
 }
 
-export { WORD_LENGTH, WORDS, PLAYABLE_WORDS };
+export { WORD_LENGTH, WORDS, PLAYABLE_WORDS, DEFAULT_NEXT_ROUND_DELAY_MS };

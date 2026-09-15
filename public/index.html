@@ -11,8 +11,6 @@
 
   <!-- ============================================================
        DIAGNOSTICS RIBBON - always visible, collapsible.
-       Requirement #3: proof-of-life counter + last message readout,
-       right there on screen, no server logs needed.
   ============================================================= -->
   <div id="diagBar" class="diag-bar">
     <button id="diagToggle" class="diag-toggle" aria-label="Toggle diagnostics">
@@ -24,9 +22,9 @@
       <div class="diag-row"><b>Connection:</b> <span id="diagConnState">idle</span></div>
       <div class="diag-row"><b>Sign key configured:</b> <span id="diagSignKey">checking…</span></div>
       <div class="diag-row"><b>Events received (all):</b> <span id="diagEvents">0</span></div>
-      <div class="diag-row"><b>Recognized as guesses:</b> <span id="diagRecognized">0</span></div>
+      <div class="diag-row"><b>Accepted onto board:</b> <span id="diagRecognized">0</span></div>
       <div class="diag-row"><b>Last received:</b> <span id="diagLast">—</span></div>
-      <div class="diag-row diag-sub">If "Events received" stays at 0, messages are not arriving at all (check your TikTok username / that you're live). If it climbs but "Recognized" doesn't, messages are arriving but not being read as 5-letter guesses - that's normal for chit-chat.</div>
+      <div class="diag-row diag-sub">If "Events received" stays at 0, messages aren't arriving at all (check the TikTok username / that you're live). If it climbs but "Accepted" doesn't, messages are arriving but aren't a single recognizable 5-letter word - normal for chit-chat.</div>
       <details class="diag-raw">
         <summary>Raw event samples (first few, for troubleshooting)</summary>
         <pre id="diagRawSamples">No samples yet.</pre>
@@ -43,6 +41,7 @@
   ============================================================= -->
   <header class="app-header">
     <div class="brand">
+      <span class="brand-mark">✦</span>
       <span class="brand-title">CRISSLE<span class="brand-accent">CROSSLE</span></span>
       <span class="brand-sub">LIVE</span>
     </div>
@@ -53,11 +52,12 @@
         <div class="timer-bar-bg"><div id="timerBar" class="timer-bar-fill"></div></div>
         <span id="timerText">--</span>
       </div>
+      <button id="howToPlayBtn" class="btn btn-ghost btn-help" type="button">❓ How to Play</button>
     </div>
   </header>
 
   <!-- ============================================================
-       MAIN CONTENT (scrolls; header + sticky bar do not)
+       MAIN CONTENT
   ============================================================= -->
   <main class="main-content">
 
@@ -67,17 +67,18 @@
         <span class="legend-item"><i class="chip chip-yellow"></i> Yellow</span>
         <span class="legend-item"><i class="chip chip-grey"></i> Grey</span>
         <span class="legend-item"><i class="chip chip-decoy"></i> Decoy word (blue)</span>
-        <span class="legend-note">Colors reflect the answer <b>OR</b> the decoy - a green tile isn't a guarantee!</span>
+        <span class="legend-note">Unlimited guesses — only real 5-letter words are tested &amp; added to the board. A green tile isn't a guarantee - it may be the decoy!</span>
       </div>
 
       <div id="hintsRow" class="hints-row hidden">
-        <span class="hints-label">Hints revealed:</span>
+        <span class="hints-label">💡 Hints revealed:</span>
         <div id="hintsTiles" class="hints-tiles"></div>
       </div>
 
       <div id="board" class="board">
         <div class="board-empty" id="boardEmpty">
-          Waiting for the host to start the first round…
+          <div class="board-empty-icon">🎮</div>
+          <div>Waiting for the host to start the first round…</div>
         </div>
       </div>
 
@@ -102,10 +103,9 @@
   </main>
 
   <!-- ============================================================
-       STICKY HOST CONTROL BAR
-       Requirement #7: sticky so it can never scroll off-screen on
-       a phone, with a collapsible drawer so it doesn't dominate a
-       small screen during broadcast.
+       STICKY HOST CONTROL BAR - grouped into cards, collapsible
+       drawer on mobile so it never dominates the screen but also
+       never scrolls away.
   ============================================================= -->
   <div id="hostBar" class="host-bar">
     <button id="hostBarHandle" class="host-bar-handle">
@@ -113,36 +113,126 @@
     </button>
 
     <div id="hostBarBody" class="host-bar-body">
+      <div class="host-cards">
 
-      <div class="host-row">
-        <span class="host-label">Connect:</span>
-        <input id="tiktokUsernameInput" type="text" placeholder="TikTok @username" autocomplete="off" />
-        <button id="connectBtn" class="btn btn-primary">Connect</button>
-        <button id="disconnectBtn" class="btn btn-ghost">Disconnect</button>
-        <label class="switch-label">
-          <input type="checkbox" id="testModeToggle" />
-          <span>Test Mode</span>
-        </label>
+        <div class="host-card">
+          <div class="host-card-title">📡 Connection</div>
+          <div class="host-card-row">
+            <input id="tiktokUsernameInput" type="text" placeholder="TikTok @username" autocomplete="off" />
+            <button id="connectBtn" class="btn btn-primary">Connect</button>
+            <button id="disconnectBtn" class="btn btn-ghost">Disconnect</button>
+          </div>
+          <label class="switch-label">
+            <input type="checkbox" id="testModeToggle" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+            <span>Test Mode (no live connection needed)</span>
+          </label>
+        </div>
+
+        <div class="host-card">
+          <div class="host-card-title">🎮 Round Control</div>
+          <div class="host-card-row">
+            <button id="startRoundBtn" class="btn btn-accent">▶ Start Round</button>
+            <button id="skipRoundBtn" class="btn btn-ghost">⏭ Skip</button>
+            <button id="hintBtn" class="btn btn-ghost">💡 Hint</button>
+            <button id="revealBtn" class="btn btn-ghost">👁 Reveal</button>
+          </div>
+          <div class="host-card-row">
+            <label class="mini-label">Difficulty
+              <select id="difficultySelect" class="select">
+                <option value="easy">Easy</option>
+                <option value="normal" selected>Normal</option>
+                <option value="hard">Hard</option>
+              </select>
+            </label>
+            <label class="mini-label">Next round
+              <select id="nextRoundDelaySelect" class="select">
+                <option value="3">3s</option>
+                <option value="5">5s</option>
+                <option value="10">10s</option>
+                <option value="15">15s</option>
+                <option value="30">30s</option>
+                <option value="60">60s</option>
+              </select>
+            </label>
+            <button id="resetLeaderboardBtn" class="btn btn-danger-ghost">Reset Leaderboard</button>
+          </div>
+        </div>
+
+        <div class="host-card">
+          <div class="host-card-title">🎙️ Host Say</div>
+          <div class="host-card-row host-say-row">
+            <input id="hostSayInput" type="text" placeholder="Answer viewers or test a guess…" autocomplete="off" />
+            <button id="hostSayBtn" class="btn btn-primary">Send</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       HOW TO PLAY MODAL
+  ============================================================= -->
+  <div id="howToPlayModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <button id="howToPlayClose" class="modal-close" aria-label="Close">✕</button>
+      <h2 class="modal-title">❓ How to Play CrissleCrossle LIVE</h2>
+
+      <div class="modal-section">
+        <h3>The goal</h3>
+        <p>The host starts a round with a secret 5-letter word. Viewers guess by
+        typing a 5-letter word <b>by itself</b> in the LIVE chat (e.g. just
+        <code>APPLE</code>, not "I think it's apple!"). Every valid word
+        guessed gets tested and added to the board. First person to type the
+        exact secret word wins the round.</p>
       </div>
 
-      <div class="host-row">
-        <span class="host-label">Round:</span>
-        <button id="startRoundBtn" class="btn btn-accent">▶ Start Round</button>
-        <button id="skipRoundBtn" class="btn btn-ghost">⏭ Skip</button>
-        <button id="hintBtn" class="btn btn-ghost">💡 Give Hint</button>
-        <button id="revealBtn" class="btn btn-ghost">👁 Reveal Answer</button>
-        <select id="difficultySelect" class="select">
-          <option value="easy">Easy</option>
-          <option value="normal" selected>Normal</option>
-          <option value="hard">Hard</option>
-        </select>
-        <button id="resetLeaderboardBtn" class="btn btn-danger-ghost">Reset Leaderboard</button>
+      <div class="modal-section">
+        <h3>The twist: a decoy word every guess</h3>
+        <p>Here's what makes it tricky - after <i>every</i> guess, a fresh
+        <b>blue decoy word</b> is also chosen. A tile turns
+        <span class="hl-green">green</span> if the letter matches that
+        position in the <b>real answer OR the decoy</b>. A tile turns
+        <span class="hl-yellow">yellow</span> if the letter is
+        somewhere in the answer or the decoy, just not that exact spot. So a
+        green tile is a good sign, but it is <b>not proof</b> - it might only
+        be green because of the decoy!</p>
+
+        <div class="example-board">
+          <div class="example-caption">Example: guessing <b>CLAIM</b> while the decoy that round was <b>CRIME</b></div>
+          <div class="example-row">
+            <div class="tile-set" id="exampleGuessTiles"></div>
+            <span class="example-vs">vs. decoy</span>
+            <div class="tile-set" id="exampleDecoyTiles"></div>
+          </div>
+          <ul class="example-notes">
+            <li><span class="hl-green">C is green</span> - matches the decoy's C in spot 1, so this alone doesn't confirm the real answer starts with C.</li>
+            <li><span class="hl-yellow">L is yellow</span> - the decoy has no L at all, so this yellow can only be coming from the real answer (just not in spot 2).</li>
+            <li><span class="hl-grey">A is grey</span> - not in the answer or the decoy anywhere.</li>
+            <li><span class="hl-yellow">I is yellow</span> - the decoy has an I (in a different spot), so this one's ambiguous.</li>
+            <li><span class="hl-green">M is green</span> - the decoy's M is in a different spot, so this green <b>must</b> be from the real answer.</li>
+          </ul>
+        </div>
       </div>
 
-      <div class="host-row host-say-row">
-        <span class="host-label">Say / Test:</span>
-        <input id="hostSayInput" type="text" placeholder="Type to answer viewers or test a guess…" autocomplete="off" />
-        <button id="hostSayBtn" class="btn btn-primary">Send</button>
+      <div class="modal-section">
+        <h3>Guessing &amp; hints</h3>
+        <ul class="plain-list">
+          <li><b>Unlimited guesses</b> - there's no attempt limit, only a round timer.</li>
+          <li>Only guesses that are <b>real 5-letter words</b> get tested and shown on the board - random letters are ignored.</li>
+          <li>The host can drop a free <b>hint letter</b> any time, and one also appears automatically every few guesses.</li>
+          <li>If nobody solves it before time runs out, the answer is revealed and a new round begins.</li>
+        </ul>
+      </div>
+
+      <div class="modal-section">
+        <h3>Scoring</h3>
+        <ul class="plain-list">
+          <li>+2 points just for making your first valid guess each round.</li>
+          <li>A big bonus for actually solving it - the earlier you solve it, the bigger the bonus.</li>
+          <li>Top 10 all-time scores are shown on the leaderboard.</li>
+        </ul>
       </div>
     </div>
   </div>
