@@ -25,10 +25,20 @@ export const DIFFICULTIES = {
 export const NEXT_ROUND_DELAY_OPTIONS = [3, 5, 10, 15, 30, 60];
 const DEFAULT_NEXT_ROUND_DELAY_MS = 3000;
 
-const SOLVE_BASE_SCORE = 100;
-const SOLVE_SCORE_STEP = 6;
-const SOLVE_SCORE_MIN = 25;
-const PARTICIPATION_SCORE = 2;
+// Scoring is intentionally small-numbered - a live chat reads "21 points"
+// faster than "84 points", and small numbers make round-to-round swings on
+// the leaderboard feel meaningful instead of noisy. The formula still
+// rewards the things that should matter:
+//   - solving in fewer guesses (decays by attempt count)
+//   - solving without leaning on hints (a small penalty per hint used)
+//   - solving quickly (a flat bonus for finishing in the round's first third)
+const SOLVE_BASE_SCORE = 20;
+const SOLVE_SCORE_STEP = 1;
+const SOLVE_SCORE_MIN = 5;
+const HINT_PENALTY = 2;
+const QUICK_SOLVE_BONUS = 5;
+const QUICK_SOLVE_TIME_FRACTION = 1 / 3;
+const PARTICIPATION_SCORE = 1;
 
 /**
  * Classic Wordle-style two-pass color comparison of `guess` against a single
@@ -151,9 +161,13 @@ export function isAcceptableGuess(word) {
   return isKnownWord(word);
 }
 
-function scoreForSolve(attemptCountIncludingSolve) {
-  const score = SOLVE_BASE_SCORE - SOLVE_SCORE_STEP * (attemptCountIncludingSolve - 1);
-  return Math.max(SOLVE_SCORE_MIN, score);
+function scoreForSolve(attemptCountIncludingSolve, hintsUsedCount, quickSolve) {
+  let score = SOLVE_BASE_SCORE
+    - SOLVE_SCORE_STEP * (attemptCountIncludingSolve - 1)
+    - HINT_PENALTY * hintsUsedCount;
+  score = Math.max(SOLVE_SCORE_MIN, score);
+  if (quickSolve) score += QUICK_SOLVE_BONUS;
+  return score;
 }
 
 /**
@@ -336,13 +350,16 @@ export class GameEngine {
     }
 
     if (isCorrect) {
-      const bonus = scoreForSolve(this.round.attempts.length);
+      const elapsedFraction = (Date.now() - this.round.startedAt) / (this.round.endsAt - this.round.startedAt);
+      const quickSolve = elapsedFraction <= QUICK_SOLVE_TIME_FRACTION;
+      const bonus = scoreForSolve(this.round.attempts.length, this.round.hints.length, quickSolve);
       this._bumpScore(username, bonus);
       const entry = this.leaderboard.get(key);
       if (entry) entry.solves = (entry.solves || 0) + 1;
       this.round.solved = true;
       this.round.solvedBy = username;
       this.round.solveBonus = bonus;
+      this.round.quickSolve = quickSolve;
       this._endRound('solved');
       this.onChange('solved');
       return { recognized: true, correct: true, bonus };
@@ -376,6 +393,7 @@ export class GameEngine {
         solved: r.solved,
         solvedBy: r.solvedBy,
         solveBonus: r.solveBonus,
+        quickSolve: r.quickSolve,
         status: r.status,
         startedAt: r.startedAt,
         endsAt: r.endsAt,

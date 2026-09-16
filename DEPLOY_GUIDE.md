@@ -118,12 +118,15 @@ You'll also see:
   recognized as guesses. You will not need to look at any server logs.
 - The **game board** in the middle, where guesses appear as they come in.
 - A **leaderboard** and **live chat feed** on the side.
-- A **Host Controls** bar at the bottom of the screen that always stays
-  visible, even on a phone, even while scrolling.
+- A small **⚙️ Host** button floating in the bottom corner. Tapping it
+  slides up the full control panel without covering or interfering with
+  the game board — tap it again (or tap outside the panel) to tuck it away.
+  It's fixed in place, so it's always reachable and can never be scrolled
+  off-screen, even on a phone.
 
 ### Test Mode (try this first, before going live)
 
-1. Tap the **Test Mode** switch in the Host Controls bar.
+1. Tap the **⚙️ Host** button, then flip the **Test Mode** switch.
 2. Fake viewers will start "chatting" and guessing automatically. Tap
    **Start Round** to begin a round and watch it play out on its own.
 3. This never touches TikTok or the internet — it's purely to prove the
@@ -135,9 +138,8 @@ You'll also see:
 
 1. Make sure you're actually LIVE on TikTok first (open the TikTok app and
    start your broadcast).
-2. Back in the game screen, type your TikTok **@username** (the one you're
-   streaming from) into the "Connect" box in Host Controls and tap
-   **Connect**.
+2. Tap the **⚙️ Host** button, type your TikTok **@username** (the one
+   you're streaming from) into the "Connect" box, and tap **Connect**.
 3. Watch the diagnostics dot: yellow = connecting, green = connected, red =
    there was a problem (the message next to it explains what, in plain
    language — e.g. "doesn't look like they're LIVE right now").
@@ -156,14 +158,26 @@ You'll also see:
 8. Use the **Host Say** box to type something yourself — it appears in the
    feed as "HOST" and can also double as a way to privately test a guess
    without waiting for a viewer.
+9. Close the panel (✕, or tap outside it) once you're set — the game board
+   is unobstructed while it's closed, which is what you'll want visible
+   for the actual broadcast.
+
+### Scoring, in brief
+
+Points are deliberately small so they're easy to read at a glance on
+stream: +1 for a viewer's first valid guess each round, plus a solve bonus
+(bigger for fewer guesses, no hints used, and finishing early in the round)
+that lands roughly in the 5-25 point range. The in-game **How to Play**
+panel always shows the current rules if you want the full breakdown.
 
 ### Screen-sharing this during your broadcast
 
 Share this browser tab/window as your screen or a source in whatever app
 you use to go live. If you're viewing it on your own phone during the
-broadcast, everything important (the board, the timer, and especially the
-Host Controls) is designed to stay on-screen without you needing to scroll
-around to find it.
+broadcast, the board and timer are always visible, and the host controls
+are tucked behind that one floating button so they never get in the way of
+what your audience sees.
+
 
 ---
 

@@ -103,16 +103,24 @@
   </main>
 
   <!-- ============================================================
-       STICKY HOST CONTROL BAR - grouped into cards, collapsible
-       drawer on mobile so it never dominates the screen but also
-       never scrolls away.
+       HOST CONTROLS - a small floating button that opens a slide-up
+       panel, so by default the whole screen is just the game (nothing
+       docked/taking up space), but controls are always one tap away
+       and can never be scrolled out of reach on a phone.
   ============================================================= -->
-  <div id="hostBar" class="host-bar">
-    <button id="hostBarHandle" class="host-bar-handle">
-      <span id="hostBarHandleText">▲ Host Controls</span>
-    </button>
+  <button id="hostFab" class="host-fab" type="button" aria-label="Open host controls">
+    <span class="host-fab-icon">⚙️</span>
+    <span class="host-fab-label">Host</span>
+  </button>
 
-    <div id="hostBarBody" class="host-bar-body">
+  <div id="hostPanelOverlay" class="host-panel-overlay hidden">
+    <div class="host-panel-sheet">
+      <div class="host-panel-handle-bar"></div>
+      <div class="host-panel-header">
+        <span>⚙️ Host Controls</span>
+        <button id="hostPanelClose" class="modal-close" aria-label="Close host controls">✕</button>
+      </div>
+
       <div class="host-cards">
 
         <div class="host-card">
@@ -229,8 +237,8 @@
       <div class="modal-section">
         <h3>Scoring</h3>
         <ul class="plain-list">
-          <li>+2 points just for making your first valid guess each round.</li>
-          <li>A big bonus for actually solving it - the earlier you solve it, the bigger the bonus.</li>
+          <li>+1 point just for making your first valid guess each round.</li>
+          <li>Solving it earns a bonus - bigger the fewer guesses it took, bigger still if you didn't need any hints, plus an extra bonus for solving within the round's first third.</li>
           <li>Top 10 all-time scores are shown on the leaderboard.</li>
         </ul>
       </div>

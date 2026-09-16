@@ -50,9 +50,9 @@
   const leaderboardList = el('leaderboardList');
   const chatFeed = el('chatFeed');
 
-  const hostBar = el('hostBar');
-  const hostBarHandle = el('hostBarHandle');
-  const hostBarHandleText = el('hostBarHandleText');
+  const hostFab = el('hostFab');
+  const hostPanelOverlay = el('hostPanelOverlay');
+  const hostPanelClose = el('hostPanelClose');
 
   const tiktokUsernameInput = el('tiktokUsernameInput');
   const connectBtn = el('connectBtn');
@@ -82,11 +82,16 @@
   diagToggle.addEventListener('click', () => diagPanel.classList.toggle('hidden'));
 
   // --------------------------------------------------------------------
-  // Host control bar collapse/expand drawer (mobile only)
+  // Host control panel: opened on demand from the floating button, closed
+  // by the X, tapping the backdrop, or Escape. Nothing about it occupies
+  // permanent screen space, so the board stays uncluttered by default.
   // --------------------------------------------------------------------
-  hostBarHandle.addEventListener('click', () => {
-    const expanded = hostBar.classList.toggle('expanded');
-    hostBarHandleText.textContent = expanded ? '▼ Hide Controls' : '▲ Host Controls';
+  function openHostPanel() { hostPanelOverlay.classList.remove('hidden'); }
+  function closeHostPanel() { hostPanelOverlay.classList.add('hidden'); }
+  hostFab.addEventListener('click', openHostPanel);
+  hostPanelClose.addEventListener('click', closeHostPanel);
+  hostPanelOverlay.addEventListener('click', (e) => {
+    if (e.target === hostPanelOverlay) closeHostPanel();
   });
 
   // --------------------------------------------------------------------
@@ -104,7 +109,10 @@
     if (e.target === howToPlayModal) closeHowToPlay();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeHowToPlay();
+    if (e.key === 'Escape') {
+      closeHowToPlay();
+      closeHostPanel();
+    }
   });
 
   // Build the worked example in the modal using the SAME tile markup as the
@@ -343,7 +351,8 @@
 
     if (round.status === 'solved') {
       roundBanner.className = 'round-banner win';
-      roundBanner.textContent = `🎉 ${round.solvedBy} solved it! The word was "${(round.revealAnswer || '').toUpperCase()}" (+${round.solveBonus} pts). Next round starting soon…`;
+      const quickTag = round.quickSolve ? ' ⚡ Quick solve!' : '';
+      roundBanner.textContent = `🎉 ${round.solvedBy} solved it! The word was "${(round.revealAnswer || '').toUpperCase()}" (+${round.solveBonus} pts).${quickTag} Next round starting soon…`;
       if (changed) fireConfetti();
     } else {
       roundBanner.className = 'round-banner lose';
