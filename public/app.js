@@ -44,6 +44,9 @@
   const leaderboardBtn = el('leaderboardBtn');
   const leaderboardTicker = el('leaderboardTicker');
   const tickerTrack = el('tickerTrack');
+  const leaderboardModal = el('leaderboardModal');
+  const leaderboardModalClose = el('leaderboardModalClose');
+  const leaderboardModalList = el('leaderboardModalList');
 
   const keyboardRow1 = el('keyboardRow1');
   const keyboardRow2 = el('keyboardRow2');
@@ -68,9 +71,8 @@
   const skipRoundBtn = el('skipRoundBtn');
   const hintBtn = el('hintBtn');
   const revealBtn = el('revealBtn');
-  const difficultySelect = el('difficultySelect');
+  const wordLengthSelect = el('wordLengthSelect');
   const nextRoundDelaySelect = el('nextRoundDelaySelect');
-  const leaderboardDurationSelect = el('leaderboardDurationSelect');
   const resetLeaderboardBtn = el('resetLeaderboardBtn');
 
   const hostSayInput = el('hostSayInput');
@@ -148,6 +150,7 @@
     if (e.key === 'Escape') {
       closeHowToPlay();
       closeHostPanel();
+      closeLeaderboardModal();
     }
   });
 
@@ -231,40 +234,57 @@
   }
 
   // --------------------------------------------------------------------
-  // Leaderboard ticker: a horizontally scrolling "news ticker" of the top
-  // 10. Shown either because the host pinned it open via the header
-  // button, or automatically for a few seconds right after a round is
-  // solved (see the celebration sequence in renderBanner()).
+  // Leaderboard: an always-on scrolling ticker up top, plus a full
+  // ranked list opened on demand from the header button.
   // --------------------------------------------------------------------
-  let leaderboardPinned = false;
-  let leaderboardAutoUntil = 0;
-  let leaderboardDisplayMs = 3000;
-  let latestLeaderboard = [];
-
   function renderLeaderboardTicker(top) {
-    latestLeaderboard = top || [];
-    if (!latestLeaderboard.length) {
+    const list = top || [];
+    const medals = ['🥇', '🥈', '🥉'];
+
+    if (!list.length) {
       tickerTrack.innerHTML = '<span class="ticker-entry">No scores yet - guesses earn points!</span>';
+    } else {
+      const entryHtml = list
+        .map((e, i) => `<span class="ticker-entry">${medals[i] || (i + 1) + '.'} ${escapeHtml(e.username)}<span class="ticker-score">${e.score} pts</span></span>`)
+        .join('');
+      // Two copies back-to-back so the CSS marquee (translateX -50%) loops seamlessly.
+      tickerTrack.innerHTML = entryHtml + entryHtml;
+    }
+
+    leaderboardModalList.innerHTML = '';
+    if (!list.length) {
+      const li = document.createElement('li');
+      li.className = 'empty-note';
+      li.textContent = 'No scores yet - guesses earn points!';
+      leaderboardModalList.appendChild(li);
       return;
     }
-    const medals = ['🥇', '🥈', '🥉'];
-    const entryHtml = latestLeaderboard
-      .map((e, i) => `<span class="ticker-entry">${medals[i] || (i + 1) + '.'} ${escapeHtml(e.username)}<span class="ticker-score">${e.score} pts</span></span>`)
-      .join('');
-    // Two copies back-to-back so the CSS marquee (translateX -50%) loops seamlessly.
-    tickerTrack.innerHTML = entryHtml + entryHtml;
+    list.forEach((entry, i) => {
+      const li = document.createElement('li');
+      if (i === 0) li.classList.add('top1');
+      if (i === 1) li.classList.add('top2');
+      if (i === 2) li.classList.add('top3');
+      const left = document.createElement('span');
+      const rank = document.createElement('span');
+      rank.className = 'rank';
+      rank.textContent = medals[i] || `${i + 1}.`;
+      left.appendChild(rank);
+      left.appendChild(document.createTextNode(entry.username));
+      const score = document.createElement('span');
+      score.className = 'lb-score';
+      score.textContent = `${entry.score} pts`;
+      li.appendChild(left);
+      li.appendChild(score);
+      leaderboardModalList.appendChild(li);
+    });
   }
 
-  function updateLeaderboardVisibility() {
-    const visible = leaderboardPinned || Date.now() < leaderboardAutoUntil;
-    leaderboardTicker.classList.toggle('hidden', !visible);
-  }
-  setInterval(updateLeaderboardVisibility, 400);
-
-  leaderboardBtn.addEventListener('click', () => {
-    leaderboardPinned = !leaderboardPinned;
-    leaderboardBtn.classList.toggle('active', leaderboardPinned);
-    updateLeaderboardVisibility();
+  function openLeaderboardModal() { leaderboardModal.classList.remove('hidden'); }
+  function closeLeaderboardModal() { leaderboardModal.classList.add('hidden'); }
+  leaderboardBtn.addEventListener('click', openLeaderboardModal);
+  leaderboardModalClose.addEventListener('click', closeLeaderboardModal);
+  leaderboardModal.addEventListener('click', (e) => {
+    if (e.target === leaderboardModal) closeLeaderboardModal();
   });
 
   function escapeHtml(str) {
@@ -282,13 +302,9 @@
     renderGame(state.game);
     diagSignKey.textContent = state.signKeyConfigured ? 'yes ✅' : 'NO ⚠️ (see setup step 4)';
     testModeToggle.checked = !!state.testModeActive;
-    if (state.game && state.game.difficultyKey) difficultySelect.value = state.game.difficultyKey;
+    if (state.game && state.game.wordLength) wordLengthSelect.value = String(state.game.wordLength);
     if (state.game && state.game.nextRoundDelayMs) {
       nextRoundDelaySelect.value = String(Math.round(state.game.nextRoundDelayMs / 1000));
-    }
-    if (state.game && state.game.leaderboardDisplayMs) {
-      leaderboardDisplayMs = state.game.leaderboardDisplayMs;
-      leaderboardDurationSelect.value = String(Math.round(leaderboardDisplayMs / 1000));
     }
   });
 
@@ -368,11 +384,6 @@
     const attemptCountChanged = round.attempts.length !== lastRenderedAttemptCount;
 
     if (isNewRound) {
-      // A fresh round starting is also the point where any leftover
-      // leaderboard auto-display from the previous round's celebration
-      // should stop overlapping active gameplay.
-      leaderboardAutoUntil = 0;
-      updateLeaderboardVisibility();
       resetKeyboard();
     }
 
@@ -457,29 +468,41 @@
   function renderBanner(round) {
     if (round.status === 'active') {
       roundBanner.classList.add('hidden');
+      roundBanner.innerHTML = '';
       lastBannerStatus = null;
       return;
     }
     const statusKey = `${round.number}:${round.status}`;
     const changed = lastBannerStatus !== statusKey;
     roundBanner.classList.remove('hidden');
+    if (!changed) return; // already showing the right thing - don't re-animate it
+
+    roundBanner.innerHTML = '';
 
     if (round.status === 'solved') {
       roundBanner.className = 'round-banner win';
-      const quickTag = round.quickSolve ? ' ⚡ Quick solve!' : '';
-      roundBanner.textContent = `🎉 ${round.solvedBy} solved it! The word was "${(round.revealAnswer || '').toUpperCase()}" (+${round.solveBonus} pts).${quickTag} Next round starting soon…`;
-      if (changed) {
-        fireConfetti();
-        // Celebration sequence: the banner above already names the winner,
-        // the answer, and the points earned - immediately afterward, show
-        // the leaderboard ticker for the host-configured duration.
-        leaderboardAutoUntil = Date.now() + leaderboardDisplayMs;
-        updateLeaderboardVisibility();
-      }
+
+      // Row 1: who got it right (larger, the star of the moment).
+      const quickTag = round.quickSolve ? ' ⚡' : '';
+      const winnerRow = document.createElement('div');
+      winnerRow.className = 'banner-row banner-row-winner';
+      winnerRow.textContent = `🎉 ${round.solvedBy} got it right!${quickTag}`;
+      roundBanner.appendChild(winnerRow);
+
+      // Row 2: the answer and points earned (smaller, supporting detail).
+      const answerRow = document.createElement('div');
+      answerRow.className = 'banner-row banner-row-answer';
+      answerRow.textContent = `Answer: ${(round.revealAnswer || '').toUpperCase()} · +${round.solveBonus} pts`;
+      roundBanner.appendChild(answerRow);
+
+      fireConfetti();
     } else {
       roundBanner.className = 'round-banner lose';
       const reason = round.status === 'timeout' ? 'Time ran out!' : 'Round ended.';
-      roundBanner.textContent = `${reason} The word was "${(round.revealAnswer || '').toUpperCase()}". Next round starting soon…`;
+      const row = document.createElement('div');
+      row.className = 'banner-row banner-row-winner';
+      row.textContent = `${reason} The word was "${(round.revealAnswer || '').toUpperCase()}".`;
+      roundBanner.appendChild(row);
     }
     lastBannerStatus = statusKey;
   }
@@ -549,16 +572,12 @@
     }
   });
 
-  difficultySelect.addEventListener('change', () => {
-    socket.emit('host:setDifficulty', { key: difficultySelect.value });
+  wordLengthSelect.addEventListener('change', () => {
+    socket.emit('host:setWordLength', { length: Number(wordLengthSelect.value) });
   });
 
   nextRoundDelaySelect.addEventListener('change', () => {
     socket.emit('host:setNextRoundDelay', { seconds: Number(nextRoundDelaySelect.value) });
-  });
-
-  leaderboardDurationSelect.addEventListener('change', () => {
-    socket.emit('host:setLeaderboardDuration', { seconds: Number(leaderboardDurationSelect.value) });
   });
 
   function sendHostSay() {

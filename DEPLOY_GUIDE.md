@@ -119,9 +119,9 @@ You'll also see:
 - The **game board** in the middle, where guesses appear as they come in.
 - An **on-screen keyboard** above the board, showing at a glance which
   letters have turned up green/yellow/grey so far this round.
-- A **🏆 Leaderboard** button up top — tap it to pin the top-10 ticker open
-  or closed any time. It also pops up automatically for a few seconds
-  right after someone solves a round.
+- A **🏆 Leaderboard** button up top — tap it to see the top 10 as a
+  ranked list of names and points. The scrolling ticker up top always
+  shows the same top 10 too, no tapping required.
 - A **⛶ Fullscreen** button up top for a clean, distraction-free display
   while you're broadcasting.
 - A small **⚙️ Host** button floating in the bottom corner. Tapping it
@@ -151,23 +151,23 @@ You'll also see:
    language — e.g. "doesn't look like they're LIVE right now").
 4. If it fails, it automatically retries a couple of times on its own
    before giving up and showing you an error message.
-5. Tap **Start Round** to begin. Tell your viewers to type a 5-letter word
-   guess **by itself** in the comments (just `APPLE`, not "I think it's
-   apple!") — that's the most reliable way for the game to recognize it.
-   Guessing is unlimited — viewers can guess as many times as they want,
-   and only real dictionary words get tested and added to the board.
+5. Tap **Start Round** to begin. By default it's a 5-letter round — change
+   the **Word length** dropdown in Round Control any time (4 up to 20
+   letters) to change how long the secret word is for the *next* round.
+   Tell your viewers to type a guess **by itself**, matching that length,
+   in the comments (just `APPLE`, not "I think it's apple!") — that's the
+   most reliable way for the game to recognize it. Guessing is
+   unlimited — viewers can guess as many times as they want, and only
+   real dictionary words get tested and added to the board.
 6. Use **Hint** any time you want to help viewers along, **Skip** to
    abandon a round early, or **Reveal** to end it immediately.
 7. The next round starts automatically 3 seconds after one ends by
    default — change the **Next round** dropdown in Round Control if you'd
    rather give more breathing room between rounds.
-8. Right after someone solves a round, the leaderboard ticker pops up
-   automatically for 3 seconds by default too — change **Leaderboard
-   shows for** in Round Control to adjust that.
-9. Use the **Host Say** box to type something yourself — it appears in the
+8. Use the **Host Say** box to type something yourself — it appears in the
    feed as "HOST" and can also double as a way to privately test a guess
    without waiting for a viewer.
-10. Close the panel (✕, or tap outside it) once you're set — the game
+9. Close the panel (✕, or tap outside it) once you're set — the game
    board is unobstructed while it's closed, which is what you'll want
    visible for the actual broadcast.
 
@@ -210,9 +210,10 @@ changes without writing any:
 - **Diagnostics says "Events received: 0" and it's not moving** → Chat
   messages aren't arriving at all. Double-check you typed the exact TikTok
   username (no spaces, the `@` is optional) and that you're truly LIVE.
-- **Events are climbing but "Recognized" isn't** → Messages are arriving
-  fine; people just aren't typing single 5-letter word guesses. That's
-  normal for general chit-chat — only clean guesses like `APPLE` count.
+- **Events are climbing but "Accepted" isn't** → Messages are arriving
+  fine; people just aren't typing single word guesses matching this
+  round's word length. That's normal for general chit-chat — only clean
+  guesses at the right length (like `APPLE` for a 5-letter round) count.
 - **Status dot is red** → Read the message next to it; it's written in
   plain English on purpose (e.g. rate-limited, account not live, etc.).
   It will already have retried a couple of times automatically.

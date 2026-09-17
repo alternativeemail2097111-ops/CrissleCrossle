@@ -64,7 +64,7 @@ export class TestModeSimulator {
     let text;
 
     if (roll < 0.5) {
-      // A plausible 5-letter guess.
+      // A plausible guess matching the current round's word length.
       const pool = this.getWordPool ? this.getWordPool() : [];
       text = pool.length ? pick(pool) : 'apple';
       // Occasionally simulate someone actually nailing the answer, so the

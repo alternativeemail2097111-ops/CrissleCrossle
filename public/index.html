@@ -24,7 +24,7 @@
       <div class="diag-row"><b>Events received (all):</b> <span id="diagEvents">0</span></div>
       <div class="diag-row"><b>Accepted onto board:</b> <span id="diagRecognized">0</span></div>
       <div class="diag-row"><b>Last received:</b> <span id="diagLast">—</span></div>
-      <div class="diag-row diag-sub">If "Events received" stays at 0, messages aren't arriving at all (check the TikTok username / that you're live). If it climbs but "Accepted" doesn't, messages are arriving but aren't a single recognizable 5-letter word - normal for chit-chat.</div>
+      <div class="diag-row diag-sub">If "Events received" stays at 0, messages aren't arriving at all (check the TikTok username / that you're live). If it climbs but "Accepted" doesn't, messages are arriving but aren't a single recognizable word matching this round's length - normal for chit-chat.</div>
       <details class="diag-raw">
         <summary>Raw event samples (first few, for troubleshooting)</summary>
         <pre id="diagRawSamples">No samples yet.</pre>
@@ -64,11 +64,9 @@
   </header>
 
   <!-- ============================================================
-       LEADERBOARD NEWS TICKER - hidden by default; shown either by
-       the header button (pinned open) or automatically for a few
-       seconds after someone solves a round.
+       LEADERBOARD NEWS TICKER - always on screen, scrolling the top 10.
   ============================================================= -->
-  <div id="leaderboardTicker" class="leaderboard-ticker hidden">
+  <div id="leaderboardTicker" class="leaderboard-ticker">
     <span class="ticker-label">🏆 TOP 10</span>
     <div class="ticker-track-wrap">
       <div id="tickerTrack" class="ticker-track"></div>
@@ -87,7 +85,7 @@
         <span class="legend-item"><i class="chip chip-yellow"></i> Yellow</span>
         <span class="legend-item"><i class="chip chip-grey"></i> Grey</span>
         <span class="legend-item"><i class="chip chip-decoy"></i> Decoy word (blue)</span>
-        <span class="legend-note">Unlimited guesses — only real 5-letter words are tested &amp; added to the board.</span>
+        <span class="legend-note">Unlimited guesses — only real words (matching this round's length) are tested &amp; added to the board.</span>
       </div>
 
       <!-- On-screen keyboard: shows the best status seen so far for every
@@ -158,11 +156,25 @@
             <button id="revealBtn" class="btn btn-ghost">👁 Reveal</button>
           </div>
           <div class="host-card-row">
-            <label class="mini-label">Difficulty
-              <select id="difficultySelect" class="select">
-                <option value="easy">Easy</option>
-                <option value="normal" selected>Normal</option>
-                <option value="hard">Hard</option>
+            <label class="mini-label">Word length
+              <select id="wordLengthSelect" class="select">
+                <option value="4">4 letters</option>
+                <option value="5" selected>5 letters</option>
+                <option value="6">6 letters</option>
+                <option value="7">7 letters</option>
+                <option value="8">8 letters</option>
+                <option value="9">9 letters</option>
+                <option value="10">10 letters</option>
+                <option value="11">11 letters</option>
+                <option value="12">12 letters</option>
+                <option value="13">13 letters</option>
+                <option value="14">14 letters</option>
+                <option value="15">15 letters</option>
+                <option value="16">16 letters</option>
+                <option value="17">17 letters</option>
+                <option value="18">18 letters</option>
+                <option value="19">19 letters</option>
+                <option value="20">20 letters</option>
               </select>
             </label>
             <label class="mini-label">Next round
@@ -173,15 +185,6 @@
                 <option value="15">15s</option>
                 <option value="30">30s</option>
                 <option value="60">60s</option>
-              </select>
-            </label>
-            <label class="mini-label">Leaderboard shows for
-              <select id="leaderboardDurationSelect" class="select">
-                <option value="3" selected>3s</option>
-                <option value="5">5s</option>
-                <option value="8">8s</option>
-                <option value="10">10s</option>
-                <option value="15">15s</option>
               </select>
             </label>
           </div>
@@ -212,11 +215,12 @@
 
       <div class="modal-section">
         <h3>The goal</h3>
-        <p>The host starts a round with a secret 5-letter word. Viewers guess by
-        typing a 5-letter word <b>by itself</b> in the LIVE chat (e.g. just
-        <code>APPLE</code>, not "I think it's apple!"). Every valid word
-        guessed gets tested and added to the board. First person to type the
-        exact secret word wins the round.</p>
+        <p>The host picks a word length (4-20 letters) and starts a round with
+        a secret word of that length. Viewers guess by typing a matching-length
+        word <b>by itself</b> in the LIVE chat (e.g. just <code>APPLE</code> for
+        a 5-letter round, not "I think it's apple!"). Every valid word guessed
+        gets tested and added to the board. First person to type the exact
+        secret word wins the round.</p>
       </div>
 
       <div class="modal-section">
@@ -258,7 +262,7 @@
         <h3>Guessing &amp; hints</h3>
         <ul class="plain-list">
           <li><b>Unlimited guesses</b> - there's no attempt limit, only a round timer.</li>
-          <li>Only guesses that are <b>real 5-letter words</b> get tested and shown on the board - anything else shows a quick on-screen note explaining why, then gets out of the way.</li>
+          <li>Only guesses that are <b>real words at this round's length</b> get tested and shown on the board - anything else shows a quick on-screen note explaining why, then gets out of the way.</li>
           <li>The host can drop a free <b>hint letter</b> any time, and one also appears automatically every few guesses.</li>
           <li>If nobody solves it before time runs out, the answer is revealed and a new round begins.</li>
         </ul>
@@ -269,9 +273,20 @@
         <ul class="plain-list">
           <li>+1 point just for making your first valid guess each round.</li>
           <li>Solving it earns a bonus - bigger for fewer guesses, no hints used, and finishing early in the round.</li>
-          <li>Tap <b>🏆 Leaderboard</b> up top any time to see the top 10, or watch for it to pop up automatically for a few seconds right after someone solves a round.</li>
+          <li>Tap <b>🏆 Leaderboard</b> up top any time to see the full top 10 as a list - the scrolling ticker up top always shows it too.</li>
         </ul>
       </div>
+    </div>
+  </div>
+  <!-- ============================================================
+       LEADERBOARD LIST MODAL - opened from the header button; shows
+       the top 10 as a plain ranked list of names and points.
+  ============================================================= -->
+  <div id="leaderboardModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <button id="leaderboardModalClose" class="modal-close" aria-label="Close">✕</button>
+      <h2 class="modal-title">🏆 Top 10</h2>
+      <ol id="leaderboardModalList" class="leaderboard-list"></ol>
     </div>
   </div>
 

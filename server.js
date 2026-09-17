@@ -23,7 +23,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 
-import { GameEngine, DIFFICULTIES, PLAYABLE_WORDS, NEXT_ROUND_DELAY_OPTIONS, LEADERBOARD_DISPLAY_OPTIONS } from './game/engine.js';
+import { GameEngine, WORD_LENGTH_OPTIONS, NEXT_ROUND_DELAY_OPTIONS } from './game/engine.js';
+import { WORD_LISTS } from './game/words.js';
 import { Diagnostics } from './game/diagnostics.js';
 import { TikTokManager } from './game/tiktok.js';
 import { TestModeSimulator } from './game/testMode.js';
@@ -77,7 +78,7 @@ const tiktok = new TikTokManager({
   },
 });
 
-const testMode = new TestModeSimulator(handleIncomingComment, () => PLAYABLE_WORDS);
+const testMode = new TestModeSimulator(handleIncomingComment, () => WORD_LISTS[engine.round ? engine.round.wordLength : engine.wordLength] || []);
 let testModeActive = false;
 
 // ---------------------------------------------------------------------------
@@ -117,9 +118,8 @@ function buildFullState() {
     diagnostics: diagnostics.getPublicState(),
     tiktokStatus: diagnostics.connection,
     testModeActive,
-    difficulties: DIFFICULTIES,
+    wordLengthOptions: WORD_LENGTH_OPTIONS,
     nextRoundDelayOptions: NEXT_ROUND_DELAY_OPTIONS,
-    leaderboardDisplayOptions: LEADERBOARD_DISPLAY_OPTIONS,
     signKeyConfigured: !!SIGN_API_KEY,
   };
 }
@@ -260,12 +260,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('host:setDifficulty', (payload) => {
+  socket.on('host:setWordLength', (payload) => {
     try {
-      const key = payload && payload.key;
-      if (key) engine.setDifficulty(key);
+      const length = payload && payload.length;
+      if (length) engine.setWordLength(length);
     } catch (err) {
-      diagnostics.logError('socket.host:setDifficulty', err);
+      diagnostics.logError('socket.host:setWordLength', err);
     }
   });
 
@@ -275,15 +275,6 @@ io.on('connection', (socket) => {
       if (seconds) engine.setNextRoundDelay(seconds);
     } catch (err) {
       diagnostics.logError('socket.host:setNextRoundDelay', err);
-    }
-  });
-
-  socket.on('host:setLeaderboardDuration', (payload) => {
-    try {
-      const seconds = payload && payload.seconds;
-      if (seconds) engine.setLeaderboardDisplaySeconds(seconds);
-    } catch (err) {
-      diagnostics.logError('socket.host:setLeaderboardDuration', err);
     }
   });
 

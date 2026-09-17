@@ -7,28 +7,21 @@
 // TikTok viewer or from the built-in simulator.
 // ============================================================================
 
-import { WORDS, isKnownWord } from './words.js';
+import { WORD_LENGTH_OPTIONS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, randomWord, isKnownWord, poolSize } from './words.js';
 
-const WORD_LENGTH = 5;
+export { WORD_LENGTH_OPTIONS };
 
-// Difficulty presets. Guessing is unlimited at every level - difficulty
-// only tunes how long a round runs for and how often free hints appear.
-export const DIFFICULTIES = {
-  easy: { label: 'Easy', roundSeconds: 180, hintEvery: 5 },
-  normal: { label: 'Normal', roundSeconds: 120, hintEvery: 4 },
-  hard: { label: 'Hard', roundSeconds: 75, hintEvery: 6 },
-};
+const DEFAULT_WORD_LENGTH = 5;
+
+// A single, fixed pace for every round - word length is now the only thing
+// the host tunes (no more separate "difficulty" levels).
+const ROUND_SECONDS = 120;
+const HINT_EVERY = 4;
 
 // How long after a round ends before the next one auto-starts. Defaults to
 // 3 seconds; adjustable live via setNextRoundDelay() / the host panel.
 export const NEXT_ROUND_DELAY_OPTIONS = [3, 5, 10, 15, 30, 60];
 const DEFAULT_NEXT_ROUND_DELAY_MS = 3000;
-
-// How long the leaderboard auto-appears for after someone solves a round,
-// before tucking itself away again. Defaults to 3 seconds; adjustable live
-// via setLeaderboardDisplaySeconds() / the host panel.
-export const LEADERBOARD_DISPLAY_OPTIONS = [3, 5, 8, 10, 15];
-const DEFAULT_LEADERBOARD_DISPLAY_MS = 3000;
 
 // Scoring is intentionally small-numbered - a live chat reads "21 points"
 // faster than "84 points", and small numbers make round-to-round swings on
@@ -47,16 +40,18 @@ const PARTICIPATION_SCORE = 1;
 
 /**
  * Classic Wordle-style two-pass color comparison of `guess` against a single
- * `target` word. Returns an array of 'green' | 'yellow' | 'grey', one per
- * letter position. Handles duplicate letters correctly.
+ * `target` word (same length as each other). Returns an array of
+ * 'green' | 'yellow' | 'grey', one per letter position. Handles duplicate
+ * letters correctly. Works for any word length.
  */
 function colorsAgainst(guess, target) {
-  const result = new Array(WORD_LENGTH).fill('grey');
+  const len = target.length;
+  const result = new Array(len).fill('grey');
   const targetLetters = target.split('');
   const guessLetters = guess.split('');
 
   // Pass 1: greens (exact position matches), consuming those target letters.
-  for (let i = 0; i < WORD_LENGTH; i++) {
+  for (let i = 0; i < len; i++) {
     if (guessLetters[i] === targetLetters[i]) {
       result[i] = 'green';
       targetLetters[i] = null;
@@ -65,13 +60,13 @@ function colorsAgainst(guess, target) {
 
   // Count remaining (unconsumed) target letters for the yellow pass.
   const remaining = {};
-  for (let i = 0; i < WORD_LENGTH; i++) {
+  for (let i = 0; i < len; i++) {
     const l = targetLetters[i];
     if (l) remaining[l] = (remaining[l] || 0) + 1;
   }
 
   // Pass 2: yellows.
-  for (let i = 0; i < WORD_LENGTH; i++) {
+  for (let i = 0; i < len; i++) {
     if (result[i] === 'green') continue;
     const l = guessLetters[i];
     if (remaining[l] > 0) {
@@ -103,67 +98,57 @@ export function computeRowColors(guess, answer, decoy) {
 
 // Ordinary conversational 5-letter words that show up constantly in chat
 // chit-chat ("guess", "hello", "there", "first"...) and would otherwise get
-// mistaken for deliberate guesses. Excluding this short list is a deliberate
-// design trade-off: it costs a handful of legitimate answer words but
-// removes the most common source of false-positive "guesses".
+// mistaken for deliberate guesses when the round's word length happens to be
+// 5. Excluding this short list is a deliberate design trade-off: it costs a
+// handful of legitimate 5-letter answer words but removes the most common
+// source of false-positive "guesses". It naturally has no effect on rounds
+// using any other word length.
 const CHAT_NOISE_WORDS = new Set([
-  'guess', 'guess.', 'hello', 'there', 'where', 'which', 'their', 'would',
+  'guess', 'hello', 'there', 'where', 'which', 'their', 'would',
   'could', 'should', 'right', 'still', 'other', 'after', 'about', 'above',
   'first', 'great', 'every', 'maybe', 'think', 'video', 'super', 'doing',
-  'going', 'being', 'while', 'again', 'watch', 'check', 'plzzz', 'pleas',
-  'thank', 'sorry', 'today', 'later', 'never', 'these', 'those', 'youre',
+  'going', 'being', 'while', 'again', 'watch', 'check', 'thank', 'sorry',
+  'today', 'later', 'never', 'these', 'those', 'youre',
 ]);
 
-// The secret answer / decoy pool must NEVER include a word from the noise
-// list above - otherwise a round could pick a secret word that viewers are
-// structurally prevented from ever successfully guessing. This filtered
-// pool (not the raw WORDS list) is what rounds actually draw from.
-const PLAYABLE_WORDS = WORDS.filter((w) => !CHAT_NOISE_WORDS.has(w));
-
-function pickWord(exclude = []) {
-  const ex = new Set(exclude);
-  let w;
-  let guard = 0;
-  do {
-    w = PLAYABLE_WORDS[Math.floor(Math.random() * PLAYABLE_WORDS.length)];
-    guard++;
-  } while (ex.has(w) && guard < 200);
-  return w;
+function pickWord(length, exclude = []) {
+  return randomWord(length, exclude);
 }
 
 /**
- * Pulls a 5-letter guess word out of a free-form chat message, while
- * deliberately erring on the side of NOT recognizing a message rather than
- * misreading ordinary chatter as a guess. TikTok comments are messy
+ * Pulls a guess word matching `wordLength` out of a free-form chat message,
+ * while deliberately erring on the side of NOT recognizing a message rather
+ * than misreading ordinary chatter as a guess. TikTok comments are messy
  * ("ITS APPLE!!", "guess: apple", "apple?", "hi there how's it going") so:
  *   1. Very long messages (more than 6 words) are treated as chatter, not a
  *      one-word guess wrapped in a sentence.
- *   2. If MORE THAN ONE distinct 5-letter word appears, the message is
- *      ambiguous - we skip it rather than risk grabbing the wrong one
- *      (e.g. "guess: apple" contains both "guess" and "apple").
+ *   2. If MORE THAN ONE distinct word of the right length appears, the
+ *      message is ambiguous - we skip it rather than risk grabbing the
+ *      wrong one (e.g. "guess: apple" contains both "guess" and "apple").
  *   3. Common conversational 5-letter words ("guess", "hello", "there"...)
- *      are ignored so ordinary chatting doesn't flood the board.
+ *      are ignored so ordinary chatting doesn't flood the board (only
+ *      matters when wordLength is 5).
  */
-export function extractGuessWord(text) {
+export function extractGuessWord(text, wordLength) {
   if (!text || typeof text !== 'string') return null;
   const tokens = text.match(/[a-zA-Z]+/g);
   if (!tokens || tokens.length === 0 || tokens.length > 6) return null;
 
-  const fiveLetterTokens = [...new Set(tokens.filter((t) => t.length === WORD_LENGTH).map((t) => t.toLowerCase()))];
-  if (fiveLetterTokens.length !== 1) return null;
+  const matching = [...new Set(tokens.filter((t) => t.length === wordLength).map((t) => t.toLowerCase()))];
+  if (matching.length !== 1) return null;
 
-  const candidate = fiveLetterTokens[0];
-  if (CHAT_NOISE_WORDS.has(candidate)) return null;
+  const candidate = matching[0];
+  if (wordLength === 5 && CHAT_NOISE_WORDS.has(candidate)) return null;
   return candidate;
 }
 
 /**
  * Requirement: unlimited guesses, but only guesses that are an actual "fit"
- * (a real word from our dictionary) get tested and added to the board.
- * Random keyboard-mash or a 5-letter non-word never becomes a row.
+ * (a real word from our dictionary, at the round's chosen length) get tested
+ * and added to the board. Random keyboard-mash never becomes a row.
  */
-export function isAcceptableGuess(word) {
-  return isKnownWord(word);
+export function isAcceptableGuess(word, wordLength) {
+  return isKnownWord(word, wordLength);
 }
 
 function scoreForSolve(attemptCountIncludingSolve, hintsUsedCount, quickSolve) {
@@ -183,24 +168,22 @@ function scoreForSolve(attemptCountIncludingSolve, hintsUsedCount, quickSolve) {
 export class GameEngine {
   constructor({ onChange } = {}) {
     this.onChange = onChange || (() => {});
-    this.difficultyKey = 'normal';
+    this.wordLength = DEFAULT_WORD_LENGTH;
     this.leaderboard = new Map(); // username -> { username, score, solves }
     this.round = null;
     this.roundNumber = 0;
     this.tickTimer = null;
     this._nextRoundAt = null;
     this.nextRoundDelayMs = DEFAULT_NEXT_ROUND_DELAY_MS;
-    this.leaderboardDisplayMs = DEFAULT_LEADERBOARD_DISPLAY_MS;
   }
 
-  get difficulty() {
-    return DIFFICULTIES[this.difficultyKey];
-  }
-
-  setDifficulty(key) {
-    if (!DIFFICULTIES[key]) return;
-    this.difficultyKey = key;
-    this.onChange('difficulty');
+  /** Host-adjustable word length (4-20 letters) used for future rounds. */
+  setWordLength(n) {
+    const len = Number(n);
+    if (!Number.isInteger(len) || len < MIN_WORD_LENGTH || len > MAX_WORD_LENGTH) return;
+    if (poolSize(len) < 2) return; // guard against an empty/near-empty bank
+    this.wordLength = len;
+    this.onChange('settings');
   }
 
   /** Host-adjustable delay (in whole seconds) before the next round auto-starts. */
@@ -211,29 +194,22 @@ export class GameEngine {
     this.onChange('settings');
   }
 
-  /** Host-adjustable duration (in whole seconds) the leaderboard auto-shows after a solve. */
-  setLeaderboardDisplaySeconds(seconds) {
-    const n = Number(seconds);
-    if (!Number.isFinite(n) || n < 1 || n > 120) return;
-    this.leaderboardDisplayMs = Math.round(n * 1000);
-    this.onChange('settings');
-  }
-
   /** Starts a fresh round, replacing any round currently in progress. */
   startRound() {
     this._clearTimers();
     this.roundNumber += 1;
-    const d = this.difficulty;
+    const length = this.wordLength;
+    const answer = pickWord(length);
     this.round = {
       number: this.roundNumber,
-      answer: pickWord(),
+      wordLength: length,
+      answer,
       attempts: [], // { username, guess, colors, decoy, ts } - unlimited length
-      hintEvery: d.hintEvery,
       hints: [], // revealed positions, e.g. [{ index, letter }]
       solved: false,
       solvedBy: null,
       startedAt: Date.now(),
-      endsAt: Date.now() + d.roundSeconds * 1000,
+      endsAt: Date.now() + ROUND_SECONDS * 1000,
       participants: new Set(),
       status: 'active', // active | solved | timeout | skipped | revealed
       revealAnswer: null, // set when round ends
@@ -266,7 +242,7 @@ export class GameEngine {
     const { answer, hints } = this.round;
     const revealedIdx = new Set(hints.map((h) => h.index));
     const candidates = [];
-    for (let i = 0; i < WORD_LENGTH; i++) {
+    for (let i = 0; i < answer.length; i++) {
       if (!revealedIdx.has(i)) candidates.push(i);
     }
     if (candidates.length <= 1) return; // never give away the whole word
@@ -275,12 +251,9 @@ export class GameEngine {
   }
 
   // NOTE: this fires every second but deliberately does NOT call onChange()
-  // for the common case. onChange() triggers a full state broadcast, which
-  // the browser used to turn into a full board re-render every second -
-  // that's what caused every tile to flicker non-stop. The on-screen
-  // countdown is computed independently on the client from `endsAt`
-  // (see public/app.js), so this timer only needs to broadcast when
-  // something actually changes: a round ending or the next one starting.
+  // for the common case, to avoid re-triggering a full board re-render
+  // every second (that was a real bug once - see public/app.js for how the
+  // countdown is computed independently on the client instead).
   _tick() {
     if (!this.round) return;
     if (this.round.status === 'active') {
@@ -334,18 +307,20 @@ export class GameEngine {
    * applied internally and broadcast via onChange.
    */
   submitGuess(username, rawText) {
-    const guess = extractGuessWord(rawText);
-    if (!guess) return { recognized: false };
     if (!this.round || this.round.status !== 'active') return { recognized: false, reason: 'no-active-round' };
 
-    // Unlimited guessing, but only a real dictionary word is "fit" enough
-    // to be tested against the answer and added to the board. A 5-letter
-    // non-word is quietly ignored rather than wasting a board row - the
-    // `guess` is still returned here so the UI can show a brief, readable
-    // explanation of why it wasn't accepted.
-    if (!isAcceptableGuess(guess)) return { recognized: false, reason: 'not-a-word', guess };
+    const length = this.round.wordLength;
+    const guess = extractGuessWord(rawText, length);
+    if (!guess) return { recognized: false };
 
-    const decoy = pickWord([this.round.answer, guess]);
+    // Unlimited guessing, but only a real dictionary word is "fit" enough
+    // to be tested against the answer and added to the board. A non-word
+    // is quietly ignored rather than wasting a board row - the `guess` is
+    // still returned here so the UI can show a brief, readable explanation
+    // of why it wasn't accepted.
+    if (!isAcceptableGuess(guess, length)) return { recognized: false, reason: 'not-a-word', guess };
+
+    const decoy = pickWord(length, [this.round.answer, guess]);
     const colors = computeRowColors(guess, this.round.answer, decoy);
     const isCorrect = guess === this.round.answer;
 
@@ -383,7 +358,7 @@ export class GameEngine {
 
     // Reveal a hint every N attempts (unlimited guessing means this is the
     // only thing that paces the round besides the clock).
-    if (this.round.attempts.length % this.round.hintEvery === 0) {
+    if (this.round.attempts.length % HINT_EVERY === 0) {
       this._revealNextHint();
     }
 
@@ -397,16 +372,14 @@ export class GameEngine {
     const r = this.round;
     return {
       roundNumber: this.roundNumber,
-      difficultyKey: this.difficultyKey,
-      difficulty: this.difficulty,
+      wordLength: this.wordLength,
       nextRoundDelayMs: this.nextRoundDelayMs,
-      leaderboardDisplayMs: this.leaderboardDisplayMs,
       leaderboard: this.getLeaderboardTop(10),
       round: r && {
         number: r.number,
+        wordLength: r.wordLength,
         attempts: r.attempts,
         hints: r.hints,
-        wordLength: WORD_LENGTH,
         solved: r.solved,
         solvedBy: r.solvedBy,
         solveBonus: r.solveBonus,
@@ -421,4 +394,4 @@ export class GameEngine {
   }
 }
 
-export { WORD_LENGTH, WORDS, PLAYABLE_WORDS, DEFAULT_NEXT_ROUND_DELAY_MS, DEFAULT_LEADERBOARD_DISPLAY_MS };
+export { DEFAULT_NEXT_ROUND_DELAY_MS };

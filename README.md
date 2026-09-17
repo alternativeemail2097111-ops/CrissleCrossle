@@ -2,7 +2,8 @@
 
 A fully automated TikTok LIVE game overlay based on [CrissleCrossle](https://crisslecrossle.com/)
 (an "ambiguous Wordle" with a decoy word every guess). Your TikTok LIVE chat
-**is** the controller — viewers type 5-letter word guesses in your comments,
+**is** the controller — viewers type word guesses (any length the host
+picks, 4-20 letters) in your comments,
 and this app turns them into a live, scored game on screen.
 
 👉 **New here and not a developer?** Read [`DEPLOY_GUIDE.md`](./DEPLOY_GUIDE.md)
