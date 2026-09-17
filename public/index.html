@@ -47,17 +47,37 @@
     </div>
     <div class="round-meta">
       <div class="pill" id="roundPill">Round —</div>
-      <div class="pill" id="difficultyPill">Normal</div>
       <div class="timer-wrap">
         <div class="timer-bar-bg"><div id="timerBar" class="timer-bar-fill"></div></div>
         <span id="timerText">--</span>
       </div>
-      <button id="howToPlayBtn" class="btn btn-ghost btn-help" type="button">❓ How to Play</button>
+      <button id="leaderboardBtn" class="btn btn-ghost btn-icon-label" type="button">
+        <span>🏆</span><span class="btn-text">Leaderboard</span>
+      </button>
+      <button id="fullscreenBtn" class="btn btn-ghost btn-icon-label" type="button">
+        <span>⛶</span><span class="btn-text">Fullscreen</span>
+      </button>
+      <button id="howToPlayBtn" class="btn btn-ghost btn-icon-label" type="button">
+        <span>❓</span><span class="btn-text">How to Play</span>
+      </button>
     </div>
   </header>
 
   <!-- ============================================================
-       MAIN CONTENT
+       LEADERBOARD NEWS TICKER - hidden by default; shown either by
+       the header button (pinned open) or automatically for a few
+       seconds after someone solves a round.
+  ============================================================= -->
+  <div id="leaderboardTicker" class="leaderboard-ticker hidden">
+    <span class="ticker-label">🏆 TOP 10</span>
+    <div class="ticker-track-wrap">
+      <div id="tickerTrack" class="ticker-track"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MAIN CONTENT - single column, mobile-first. The keyboard
+       sits above the board, in its own section, clear of any chat.
   ============================================================= -->
   <main class="main-content">
 
@@ -67,13 +87,23 @@
         <span class="legend-item"><i class="chip chip-yellow"></i> Yellow</span>
         <span class="legend-item"><i class="chip chip-grey"></i> Grey</span>
         <span class="legend-item"><i class="chip chip-decoy"></i> Decoy word (blue)</span>
-        <span class="legend-note">Unlimited guesses — only real 5-letter words are tested &amp; added to the board. A green tile isn't a guarantee - it may be the decoy!</span>
+        <span class="legend-note">Unlimited guesses — only real 5-letter words are tested &amp; added to the board.</span>
+      </div>
+
+      <!-- On-screen keyboard: shows the best status seen so far for every
+           letter this round, using the exact same colors/tiles as the
+           board so it reads instantly at a glance. -->
+      <div class="keyboard-section">
+        <div class="keyboard-row" id="keyboardRow1"></div>
+        <div class="keyboard-row" id="keyboardRow2"></div>
       </div>
 
       <div id="hintsRow" class="hints-row hidden">
         <span class="hints-label">💡 Hints revealed:</span>
         <div id="hintsTiles" class="hints-tiles"></div>
       </div>
+
+      <div id="rejectToast" class="reject-toast hidden"></div>
 
       <div id="board" class="board">
         <div class="board-empty" id="boardEmpty">
@@ -84,29 +114,11 @@
 
       <div id="roundBanner" class="round-banner hidden"></div>
     </section>
-
-    <aside class="side-panel">
-      <div class="panel leaderboard-panel">
-        <h2>🏆 Top 10</h2>
-        <ol id="leaderboardList" class="leaderboard-list">
-          <li class="empty-note">No scores yet - guesses earn points!</li>
-        </ol>
-      </div>
-
-      <div class="panel chat-panel">
-        <h2>💬 Live Chat Feed</h2>
-        <div id="chatFeed" class="chat-feed">
-          <div class="empty-note">Chat messages will appear here once connected (or in Test Mode).</div>
-        </div>
-      </div>
-    </aside>
   </main>
 
   <!-- ============================================================
        HOST CONTROLS - a small floating button that opens a slide-up
-       panel, so by default the whole screen is just the game (nothing
-       docked/taking up space), but controls are always one tap away
-       and can never be scrolled out of reach on a phone.
+       panel, so by default the whole screen is just the game.
   ============================================================= -->
   <button id="hostFab" class="host-fab" type="button" aria-label="Open host controls">
     <span class="host-fab-icon">⚙️</span>
@@ -155,7 +167,7 @@
             </label>
             <label class="mini-label">Next round
               <select id="nextRoundDelaySelect" class="select">
-                <option value="3">3s</option>
+                <option value="3" selected>3s</option>
                 <option value="5">5s</option>
                 <option value="10">10s</option>
                 <option value="15">15s</option>
@@ -163,6 +175,17 @@
                 <option value="60">60s</option>
               </select>
             </label>
+            <label class="mini-label">Leaderboard shows for
+              <select id="leaderboardDurationSelect" class="select">
+                <option value="3" selected>3s</option>
+                <option value="5">5s</option>
+                <option value="8">8s</option>
+                <option value="10">10s</option>
+                <option value="15">15s</option>
+              </select>
+            </label>
+          </div>
+          <div class="host-card-row">
             <button id="resetLeaderboardBtn" class="btn btn-danger-ghost">Reset Leaderboard</button>
           </div>
         </div>
@@ -225,21 +248,28 @@
       </div>
 
       <div class="modal-section">
+        <h3>The on-screen keyboard</h3>
+        <p>Above the board, every letter A-Z is colored with the best status
+        seen for it so far this round - handy for spotting at a glance which
+        letters are still worth trying.</p>
+      </div>
+
+      <div class="modal-section">
         <h3>Guessing &amp; hints</h3>
         <ul class="plain-list">
           <li><b>Unlimited guesses</b> - there's no attempt limit, only a round timer.</li>
-          <li>Only guesses that are <b>real 5-letter words</b> get tested and shown on the board - random letters are ignored.</li>
+          <li>Only guesses that are <b>real 5-letter words</b> get tested and shown on the board - anything else shows a quick on-screen note explaining why, then gets out of the way.</li>
           <li>The host can drop a free <b>hint letter</b> any time, and one also appears automatically every few guesses.</li>
           <li>If nobody solves it before time runs out, the answer is revealed and a new round begins.</li>
         </ul>
       </div>
 
       <div class="modal-section">
-        <h3>Scoring</h3>
+        <h3>Scoring &amp; the leaderboard</h3>
         <ul class="plain-list">
           <li>+1 point just for making your first valid guess each round.</li>
-          <li>Solving it earns a bonus - bigger the fewer guesses it took, bigger still if you didn't need any hints, plus an extra bonus for solving within the round's first third.</li>
-          <li>Top 10 all-time scores are shown on the leaderboard.</li>
+          <li>Solving it earns a bonus - bigger for fewer guesses, no hints used, and finishing early in the round.</li>
+          <li>Tap <b>🏆 Leaderboard</b> up top any time to see the top 10, or watch for it to pop up automatically for a few seconds right after someone solves a round.</li>
         </ul>
       </div>
     </div>

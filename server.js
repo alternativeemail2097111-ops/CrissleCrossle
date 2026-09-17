@@ -23,7 +23,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 
-import { GameEngine, DIFFICULTIES, PLAYABLE_WORDS, NEXT_ROUND_DELAY_OPTIONS } from './game/engine.js';
+import { GameEngine, DIFFICULTIES, PLAYABLE_WORDS, NEXT_ROUND_DELAY_OPTIONS, LEADERBOARD_DISPLAY_OPTIONS } from './game/engine.js';
 import { Diagnostics } from './game/diagnostics.js';
 import { TikTokManager } from './game/tiktok.js';
 import { TestModeSimulator } from './game/testMode.js';
@@ -96,6 +96,11 @@ function handleIncomingComment(username, text, source) {
     if (result && result.recognized) {
       diagnostics.recordRecognized();
       io.emit('diagnostics:update', diagnostics.getPublicState());
+    } else if (result && result.reason === 'not-a-word') {
+      // Specifically the "tried to guess, but it isn't a recognized word"
+      // case - worth a brief on-screen explanation. Ordinary chit-chat
+      // (which never reaches this branch) stays silent.
+      io.emit('guess:rejected', { username, guess: result.guess, ts: Date.now() });
     }
     if (result && (result.correct || result.roundOver)) {
       saveLeaderboard();
@@ -114,6 +119,7 @@ function buildFullState() {
     testModeActive,
     difficulties: DIFFICULTIES,
     nextRoundDelayOptions: NEXT_ROUND_DELAY_OPTIONS,
+    leaderboardDisplayOptions: LEADERBOARD_DISPLAY_OPTIONS,
     signKeyConfigured: !!SIGN_API_KEY,
   };
 }
@@ -269,6 +275,15 @@ io.on('connection', (socket) => {
       if (seconds) engine.setNextRoundDelay(seconds);
     } catch (err) {
       diagnostics.logError('socket.host:setNextRoundDelay', err);
+    }
+  });
+
+  socket.on('host:setLeaderboardDuration', (payload) => {
+    try {
+      const seconds = payload && payload.seconds;
+      if (seconds) engine.setLeaderboardDisplaySeconds(seconds);
+    } catch (err) {
+      diagnostics.logError('socket.host:setLeaderboardDuration', err);
     }
   });
 

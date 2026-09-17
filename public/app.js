@@ -37,18 +37,23 @@
   const diagErrors = el('diagErrors');
 
   const roundPill = el('roundPill');
-  const difficultyPill = el('difficultyPill');
   const timerBar = el('timerBar');
   const timerText = el('timerText');
+
+  const fullscreenBtn = el('fullscreenBtn');
+  const leaderboardBtn = el('leaderboardBtn');
+  const leaderboardTicker = el('leaderboardTicker');
+  const tickerTrack = el('tickerTrack');
+
+  const keyboardRow1 = el('keyboardRow1');
+  const keyboardRow2 = el('keyboardRow2');
+  const rejectToast = el('rejectToast');
 
   const board = el('board');
   const boardEmpty = el('boardEmpty');
   const roundBanner = el('roundBanner');
   const hintsRow = el('hintsRow');
   const hintsTiles = el('hintsTiles');
-
-  const leaderboardList = el('leaderboardList');
-  const chatFeed = el('chatFeed');
 
   const hostFab = el('hostFab');
   const hostPanelOverlay = el('hostPanelOverlay');
@@ -65,6 +70,7 @@
   const revealBtn = el('revealBtn');
   const difficultySelect = el('difficultySelect');
   const nextRoundDelaySelect = el('nextRoundDelaySelect');
+  const leaderboardDurationSelect = el('leaderboardDurationSelect');
   const resetLeaderboardBtn = el('resetLeaderboardBtn');
 
   const hostSayInput = el('hostSayInput');
@@ -82,9 +88,43 @@
   diagToggle.addEventListener('click', () => diagPanel.classList.toggle('hidden'));
 
   // --------------------------------------------------------------------
+  // Fullscreen toggle
+  // --------------------------------------------------------------------
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function updateFullscreenLabel() {
+    const label = fullscreenBtn.querySelector('.btn-text');
+    const icon = fullscreenBtn.querySelector('span');
+    if (isFullscreen()) {
+      icon.textContent = '⤢';
+      if (label) label.textContent = 'Exit Fullscreen';
+    } else {
+      icon.textContent = '⛶';
+      if (label) label.textContent = 'Fullscreen';
+    }
+  }
+  fullscreenBtn.addEventListener('click', () => {
+    try {
+      if (!isFullscreen()) {
+        const target = document.documentElement;
+        const request = target.requestFullscreen || target.webkitRequestFullscreen;
+        if (request) request.call(target);
+      } else {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document);
+      }
+    } catch (_) {
+      // Fullscreen isn't available in every browser/context - fail quietly,
+      // the game still works perfectly well without it.
+    }
+  });
+  document.addEventListener('fullscreenchange', updateFullscreenLabel);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenLabel);
+
+  // --------------------------------------------------------------------
   // Host control panel: opened on demand from the floating button, closed
-  // by the X, tapping the backdrop, or Escape. Nothing about it occupies
-  // permanent screen space, so the board stays uncluttered by default.
+  // by the X, tapping the backdrop, or Escape.
   // --------------------------------------------------------------------
   function openHostPanel() { hostPanelOverlay.classList.remove('hidden'); }
   function closeHostPanel() { hostPanelOverlay.classList.add('hidden'); }
@@ -97,12 +137,8 @@
   // --------------------------------------------------------------------
   // How to Play modal
   // --------------------------------------------------------------------
-  function openHowToPlay() {
-    howToPlayModal.classList.remove('hidden');
-  }
-  function closeHowToPlay() {
-    howToPlayModal.classList.add('hidden');
-  }
+  function openHowToPlay() { howToPlayModal.classList.remove('hidden'); }
+  function closeHowToPlay() { howToPlayModal.classList.add('hidden'); }
   howToPlayBtn.addEventListener('click', openHowToPlay);
   howToPlayClose.addEventListener('click', closeHowToPlay);
   howToPlayModal.addEventListener('click', (e) => {
@@ -138,6 +174,104 @@
   })();
 
   // --------------------------------------------------------------------
+  // On-screen keyboard: A-M / N-Z, colored with the BEST status seen for
+  // each letter across this round's attempts (same info already visible
+  // per-row on the board - this is just a fast-glance summary).
+  // --------------------------------------------------------------------
+  const KEY_ROW_1 = 'ABCDEFGHIJKLM'.split('');
+  const KEY_ROW_2 = 'NOPQRSTUVWXYZ'.split('');
+  const keyElements = new Map();
+
+  (function buildKeyboard() {
+    for (const letter of KEY_ROW_1) keyElements.set(letter, makeKey(letter, keyboardRow1));
+    for (const letter of KEY_ROW_2) keyElements.set(letter, makeKey(letter, keyboardRow2));
+  })();
+
+  function makeKey(letter, container) {
+    const key = document.createElement('div');
+    key.className = 'key-tile key-unused';
+    key.textContent = letter;
+    container.appendChild(key);
+    return key;
+  }
+
+  const RANK = { green: 3, yellow: 2, grey: 1, unused: 0 };
+
+  function renderKeyboard(attempts) {
+    const best = {};
+    for (const attempt of attempts) {
+      for (let i = 0; i < attempt.guess.length; i++) {
+        const letter = attempt.guess[i].toUpperCase();
+        const color = attempt.colors[i];
+        if (!best[letter] || RANK[color] > RANK[best[letter]]) best[letter] = color;
+      }
+    }
+    for (const [letter, keyEl] of keyElements) {
+      const status = best[letter] || 'unused';
+      keyEl.className = `key-tile key-${status}`;
+    }
+  }
+
+  function resetKeyboard() {
+    for (const keyEl of keyElements.values()) keyEl.className = 'key-tile key-unused';
+  }
+
+  // --------------------------------------------------------------------
+  // Reject toast: shown when a chat message looked like a guess attempt
+  // but wasn't a recognized word. Kept on screen a bit longer than a
+  // typical toast so viewers actually have time to read it.
+  // --------------------------------------------------------------------
+  const REJECT_TOAST_DURATION_MS = 3500;
+  let rejectToastTimer = null;
+  function showRejectToast(username, guess) {
+    rejectToast.textContent = `❌ "${(guess || '').toUpperCase()}" from ${username} isn't a recognized word - not added to the board.`;
+    rejectToast.classList.remove('hidden');
+    if (rejectToastTimer) clearTimeout(rejectToastTimer);
+    rejectToastTimer = setTimeout(() => rejectToast.classList.add('hidden'), REJECT_TOAST_DURATION_MS);
+  }
+
+  // --------------------------------------------------------------------
+  // Leaderboard ticker: a horizontally scrolling "news ticker" of the top
+  // 10. Shown either because the host pinned it open via the header
+  // button, or automatically for a few seconds right after a round is
+  // solved (see the celebration sequence in renderBanner()).
+  // --------------------------------------------------------------------
+  let leaderboardPinned = false;
+  let leaderboardAutoUntil = 0;
+  let leaderboardDisplayMs = 3000;
+  let latestLeaderboard = [];
+
+  function renderLeaderboardTicker(top) {
+    latestLeaderboard = top || [];
+    if (!latestLeaderboard.length) {
+      tickerTrack.innerHTML = '<span class="ticker-entry">No scores yet - guesses earn points!</span>';
+      return;
+    }
+    const medals = ['🥇', '🥈', '🥉'];
+    const entryHtml = latestLeaderboard
+      .map((e, i) => `<span class="ticker-entry">${medals[i] || (i + 1) + '.'} ${escapeHtml(e.username)}<span class="ticker-score">${e.score} pts</span></span>`)
+      .join('');
+    // Two copies back-to-back so the CSS marquee (translateX -50%) loops seamlessly.
+    tickerTrack.innerHTML = entryHtml + entryHtml;
+  }
+
+  function updateLeaderboardVisibility() {
+    const visible = leaderboardPinned || Date.now() < leaderboardAutoUntil;
+    leaderboardTicker.classList.toggle('hidden', !visible);
+  }
+  setInterval(updateLeaderboardVisibility, 400);
+
+  leaderboardBtn.addEventListener('click', () => {
+    leaderboardPinned = !leaderboardPinned;
+    leaderboardBtn.classList.toggle('active', leaderboardPinned);
+    updateLeaderboardVisibility();
+  });
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // --------------------------------------------------------------------
   // Socket.io connection
   // --------------------------------------------------------------------
   const socket = io();
@@ -152,13 +286,17 @@
     if (state.game && state.game.nextRoundDelayMs) {
       nextRoundDelaySelect.value = String(Math.round(state.game.nextRoundDelayMs / 1000));
     }
+    if (state.game && state.game.leaderboardDisplayMs) {
+      leaderboardDisplayMs = state.game.leaderboardDisplayMs;
+      leaderboardDurationSelect.value = String(Math.round(leaderboardDisplayMs / 1000));
+    }
   });
 
   socket.on('game:update', renderGame);
   socket.on('diagnostics:update', renderDiagnostics);
   socket.on('tiktok:status', renderTiktokStatus);
   socket.on('testMode:status', (s) => { testModeToggle.checked = !!s.active; });
-  socket.on('chat:new', appendChatLine);
+  socket.on('guess:rejected', (payload) => showRejectToast(payload.username, payload.guess));
 
   socket.on('connect_error', () => {
     diagSummary.textContent = 'Cannot reach the server socket. Reload the page.';
@@ -196,35 +334,9 @@
   }
 
   // --------------------------------------------------------------------
-  // Chat feed
-  // --------------------------------------------------------------------
-  const MAX_CHAT_LINES = 40;
-  function appendChatLine(msg) {
-    const empty = chatFeed.querySelector('.empty-note');
-    if (empty) empty.remove();
-
-    const line = document.createElement('div');
-    line.className = `chat-line source-${msg.source}`;
-    const userSpan = document.createElement('span');
-    userSpan.className = 'cu';
-    userSpan.textContent = msg.username + ': ';
-    line.appendChild(userSpan);
-    line.appendChild(document.createTextNode(msg.text));
-    chatFeed.appendChild(line);
-
-    while (chatFeed.children.length > MAX_CHAT_LINES) chatFeed.removeChild(chatFeed.firstChild);
-    chatFeed.scrollTop = chatFeed.scrollHeight;
-  }
-
-  // --------------------------------------------------------------------
   // Game state rendering
   // --------------------------------------------------------------------
   let tickerInterval = null;
-  // Fingerprint of the last attempts array we actually rendered, so a
-  // broadcast that doesn't change the attempts (e.g. a difficulty change)
-  // never rebuilds - and re-triggers CSS animations on - tiles that were
-  // already on screen. This is the fix for the "letters keep flickering"
-  // bug: previously the board was fully rebuilt on every state push.
   let lastRenderedRoundNumber = null;
   let lastRenderedAttemptCount = 0;
 
@@ -232,9 +344,7 @@
     if (!game) return;
 
     roundPill.textContent = game.roundNumber ? `Round ${game.roundNumber}` : 'Round —';
-    if (game.difficulty) difficultyPill.textContent = game.difficulty.label;
-
-    renderLeaderboard(game.leaderboard || []);
+    renderLeaderboardTicker(game.leaderboard || []);
 
     const round = game.round;
 
@@ -243,6 +353,7 @@
       board.querySelectorAll('.attempt-row').forEach((n) => n.remove());
       roundBanner.classList.add('hidden');
       hintsRow.classList.add('hidden');
+      resetKeyboard();
       stopTicker();
       timerText.textContent = '--';
       timerBar.style.width = '0%';
@@ -256,11 +367,18 @@
     const isNewRound = round.number !== lastRenderedRoundNumber;
     const attemptCountChanged = round.attempts.length !== lastRenderedAttemptCount;
 
-    // Only touch the board DOM when the round changed or new attempts came
-    // in - never on an unrelated broadcast (difficulty change, settings
-    // change, etc.), so existing tiles are never re-animated needlessly.
+    if (isNewRound) {
+      // A fresh round starting is also the point where any leftover
+      // leaderboard auto-display from the previous round's celebration
+      // should stop overlapping active gameplay.
+      leaderboardAutoUntil = 0;
+      updateLeaderboardVisibility();
+      resetKeyboard();
+    }
+
     if (isNewRound || attemptCountChanged) {
       renderBoard(round, isNewRound);
+      renderKeyboard(round.attempts);
       lastRenderedRoundNumber = round.number;
       lastRenderedAttemptCount = round.attempts.length;
     }
@@ -277,14 +395,10 @@
       for (const attempt of attempts) board.appendChild(buildAttemptRow(attempt, false));
       return;
     }
-    // Same round, just new attempt(s): insert only the new rows at the top
-    // instead of rebuilding everything, so existing tiles are never
-    // recreated (and never re-trigger their entrance animation).
     const freshOnes = round.attempts.slice(lastRenderedAttemptCount);
     for (const attempt of freshOnes.slice().reverse()) {
       board.insertBefore(buildAttemptRow(attempt, true), board.firstChild);
     }
-    // Trim overly long boards for performance.
     while (board.querySelectorAll('.attempt-row').length > MAX_DISPLAYED_ROWS) {
       board.removeChild(board.lastChild);
     }
@@ -346,24 +460,32 @@
       lastBannerStatus = null;
       return;
     }
-    const changed = lastBannerStatus !== `${round.number}:${round.status}`;
+    const statusKey = `${round.number}:${round.status}`;
+    const changed = lastBannerStatus !== statusKey;
     roundBanner.classList.remove('hidden');
 
     if (round.status === 'solved') {
       roundBanner.className = 'round-banner win';
       const quickTag = round.quickSolve ? ' ⚡ Quick solve!' : '';
       roundBanner.textContent = `🎉 ${round.solvedBy} solved it! The word was "${(round.revealAnswer || '').toUpperCase()}" (+${round.solveBonus} pts).${quickTag} Next round starting soon…`;
-      if (changed) fireConfetti();
+      if (changed) {
+        fireConfetti();
+        // Celebration sequence: the banner above already names the winner,
+        // the answer, and the points earned - immediately afterward, show
+        // the leaderboard ticker for the host-configured duration.
+        leaderboardAutoUntil = Date.now() + leaderboardDisplayMs;
+        updateLeaderboardVisibility();
+      }
     } else {
       roundBanner.className = 'round-banner lose';
       const reason = round.status === 'timeout' ? 'Time ran out!' : 'Round ended.';
       roundBanner.textContent = `${reason} The word was "${(round.revealAnswer || '').toUpperCase()}". Next round starting soon…`;
     }
-    lastBannerStatus = `${round.number}:${round.status}`;
+    lastBannerStatus = statusKey;
   }
 
   function fireConfetti() {
-    const colors = ['#ff3f9e', '#8a5cff', '#2fd4ff', '#4fae5c', '#dbb23e'];
+    const colors = ['#8a5cff', '#4f8dff', '#22e0c9', '#3fd67a', '#ffcf70'];
     for (let i = 0; i < 18; i++) {
       const piece = document.createElement('div');
       piece.className = 'confetti-piece';
@@ -403,41 +525,6 @@
   }
 
   // --------------------------------------------------------------------
-  // Leaderboard rendering
-  // --------------------------------------------------------------------
-  function renderLeaderboard(top) {
-    leaderboardList.innerHTML = '';
-    if (!top.length) {
-      const li = document.createElement('li');
-      li.className = 'empty-note';
-      li.textContent = 'No scores yet - guesses earn points!';
-      leaderboardList.appendChild(li);
-      return;
-    }
-    const medals = ['🥇', '🥈', '🥉'];
-    top.forEach((entry, i) => {
-      const li = document.createElement('li');
-      if (i === 0) li.classList.add('top1');
-      if (i === 1) li.classList.add('top2');
-      if (i === 2) li.classList.add('top3');
-      const rank = document.createElement('span');
-      rank.className = 'rank';
-      rank.textContent = medals[i] || `${i + 1}.`;
-      const name = document.createElement('span');
-      name.textContent = entry.username;
-      const score = document.createElement('span');
-      score.className = 'lb-score';
-      score.textContent = entry.score;
-      const left = document.createElement('span');
-      left.appendChild(rank);
-      left.appendChild(name);
-      li.appendChild(left);
-      li.appendChild(score);
-      leaderboardList.appendChild(li);
-    });
-  }
-
-  // --------------------------------------------------------------------
   // Host control wiring
   // --------------------------------------------------------------------
   connectBtn.addEventListener('click', () => {
@@ -468,6 +555,10 @@
 
   nextRoundDelaySelect.addEventListener('change', () => {
     socket.emit('host:setNextRoundDelay', { seconds: Number(nextRoundDelaySelect.value) });
+  });
+
+  leaderboardDurationSelect.addEventListener('change', () => {
+    socket.emit('host:setLeaderboardDuration', { seconds: Number(leaderboardDurationSelect.value) });
   });
 
   function sendHostSay() {

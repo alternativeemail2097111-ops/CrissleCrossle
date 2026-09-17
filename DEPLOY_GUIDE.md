@@ -117,7 +117,13 @@ You'll also see:
   a glance whether messages are arriving at all, or arriving but not being
   recognized as guesses. You will not need to look at any server logs.
 - The **game board** in the middle, where guesses appear as they come in.
-- A **leaderboard** and **live chat feed** on the side.
+- An **on-screen keyboard** above the board, showing at a glance which
+  letters have turned up green/yellow/grey so far this round.
+- A **🏆 Leaderboard** button up top — tap it to pin the top-10 ticker open
+  or closed any time. It also pops up automatically for a few seconds
+  right after someone solves a round.
+- A **⛶ Fullscreen** button up top for a clean, distraction-free display
+  while you're broadcasting.
 - A small **⚙️ Host** button floating in the bottom corner. Tapping it
   slides up the full control panel without covering or interfering with
   the game board — tap it again (or tap outside the panel) to tuck it away.
@@ -152,15 +158,18 @@ You'll also see:
    and only real dictionary words get tested and added to the board.
 6. Use **Hint** any time you want to help viewers along, **Skip** to
    abandon a round early, or **Reveal** to end it immediately.
-7. The next round starts automatically 3 seconds after one ends — change
-   the **Next round** dropdown in Round Control if you'd rather give more
-   breathing room between rounds.
-8. Use the **Host Say** box to type something yourself — it appears in the
+7. The next round starts automatically 3 seconds after one ends by
+   default — change the **Next round** dropdown in Round Control if you'd
+   rather give more breathing room between rounds.
+8. Right after someone solves a round, the leaderboard ticker pops up
+   automatically for 3 seconds by default too — change **Leaderboard
+   shows for** in Round Control to adjust that.
+9. Use the **Host Say** box to type something yourself — it appears in the
    feed as "HOST" and can also double as a way to privately test a guess
    without waiting for a viewer.
-9. Close the panel (✕, or tap outside it) once you're set — the game board
-   is unobstructed while it's closed, which is what you'll want visible
-   for the actual broadcast.
+10. Close the panel (✕, or tap outside it) once you're set — the game
+   board is unobstructed while it's closed, which is what you'll want
+   visible for the actual broadcast.
 
 ### Scoring, in brief
 

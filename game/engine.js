@@ -20,10 +20,15 @@ export const DIFFICULTIES = {
 };
 
 // How long after a round ends before the next one auto-starts. Defaults to
-// 3 seconds per the host's chosen default; adjustable live via
-// setNextRoundDelay() / the host panel's "Next round" selector.
+// 3 seconds; adjustable live via setNextRoundDelay() / the host panel.
 export const NEXT_ROUND_DELAY_OPTIONS = [3, 5, 10, 15, 30, 60];
 const DEFAULT_NEXT_ROUND_DELAY_MS = 3000;
+
+// How long the leaderboard auto-appears for after someone solves a round,
+// before tucking itself away again. Defaults to 3 seconds; adjustable live
+// via setLeaderboardDisplaySeconds() / the host panel.
+export const LEADERBOARD_DISPLAY_OPTIONS = [3, 5, 8, 10, 15];
+const DEFAULT_LEADERBOARD_DISPLAY_MS = 3000;
 
 // Scoring is intentionally small-numbered - a live chat reads "21 points"
 // faster than "84 points", and small numbers make round-to-round swings on
@@ -185,6 +190,7 @@ export class GameEngine {
     this.tickTimer = null;
     this._nextRoundAt = null;
     this.nextRoundDelayMs = DEFAULT_NEXT_ROUND_DELAY_MS;
+    this.leaderboardDisplayMs = DEFAULT_LEADERBOARD_DISPLAY_MS;
   }
 
   get difficulty() {
@@ -202,6 +208,14 @@ export class GameEngine {
     const n = Number(seconds);
     if (!Number.isFinite(n) || n < 1 || n > 600) return;
     this.nextRoundDelayMs = Math.round(n * 1000);
+    this.onChange('settings');
+  }
+
+  /** Host-adjustable duration (in whole seconds) the leaderboard auto-shows after a solve. */
+  setLeaderboardDisplaySeconds(seconds) {
+    const n = Number(seconds);
+    if (!Number.isFinite(n) || n < 1 || n > 120) return;
+    this.leaderboardDisplayMs = Math.round(n * 1000);
     this.onChange('settings');
   }
 
@@ -326,8 +340,10 @@ export class GameEngine {
 
     // Unlimited guessing, but only a real dictionary word is "fit" enough
     // to be tested against the answer and added to the board. A 5-letter
-    // non-word is quietly ignored rather than wasting a board row.
-    if (!isAcceptableGuess(guess)) return { recognized: false, reason: 'not-a-word' };
+    // non-word is quietly ignored rather than wasting a board row - the
+    // `guess` is still returned here so the UI can show a brief, readable
+    // explanation of why it wasn't accepted.
+    if (!isAcceptableGuess(guess)) return { recognized: false, reason: 'not-a-word', guess };
 
     const decoy = pickWord([this.round.answer, guess]);
     const colors = computeRowColors(guess, this.round.answer, decoy);
@@ -384,6 +400,7 @@ export class GameEngine {
       difficultyKey: this.difficultyKey,
       difficulty: this.difficulty,
       nextRoundDelayMs: this.nextRoundDelayMs,
+      leaderboardDisplayMs: this.leaderboardDisplayMs,
       leaderboard: this.getLeaderboardTop(10),
       round: r && {
         number: r.number,
@@ -404,4 +421,4 @@ export class GameEngine {
   }
 }
 
-export { WORD_LENGTH, WORDS, PLAYABLE_WORDS, DEFAULT_NEXT_ROUND_DELAY_MS };
+export { WORD_LENGTH, WORDS, PLAYABLE_WORDS, DEFAULT_NEXT_ROUND_DELAY_MS, DEFAULT_LEADERBOARD_DISPLAY_MS };

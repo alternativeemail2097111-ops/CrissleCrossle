@@ -142,6 +142,35 @@ const TEXT_PATHS = [
   'chatMessage.comment',
 ];
 
+// A unique-per-message ID, used to detect the SAME message being delivered
+// more than once (see the de-duplication note in tiktok.js). Different
+// people typing the same word is normal and must NOT be treated as a
+// duplicate - only an identical message ID means "this is literally the
+// same event arriving again".
+const MSG_ID_PATHS = [
+  'msgId',
+  'messageId',
+  'msgID',
+  'id',
+  'common.msgId',
+  'data.msgId',
+  'data.common.msgId',
+  'chatMessage.common.msgId',
+];
+
+/**
+ * Extracts a stable message ID from a raw TikTok event, if one is present.
+ * Returns null (never throws) when no plausible ID field exists.
+ */
+export function extractMessageId(raw) {
+  try {
+    const id = firstNonEmpty(raw, MSG_ID_PATHS);
+    return id != null ? String(id) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
  * Extracts { username, text } from a raw TikTok event using the fallback
  * chain above. Never throws - worst case it returns 'unknown' / ''.
