@@ -30,6 +30,7 @@
   const diagSummary = el('diagSummary');
   const diagConnState = el('diagConnState');
   const diagSignKey = el('diagSignKey');
+  const diagDictionary = el('diagDictionary');
   const diagEvents = el('diagEvents');
   const diagRecognized = el('diagRecognized');
   const diagLast = el('diagLast');
@@ -37,8 +38,6 @@
   const diagErrors = el('diagErrors');
 
   const roundPill = el('roundPill');
-  const timerBar = el('timerBar');
-  const timerText = el('timerText');
 
   const fullscreenBtn = el('fullscreenBtn');
   const leaderboardBtn = el('leaderboardBtn');
@@ -301,6 +300,11 @@
     renderTiktokStatus(state.tiktokStatus);
     renderGame(state.game);
     diagSignKey.textContent = state.signKeyConfigured ? 'yes ✅' : 'NO ⚠️ (see setup step 4)';
+    if (state.dictionary) {
+      const d = state.dictionary;
+      const sourceLabel = { remote: 'downloaded live ✅', 'disk-cache': 'cached copy ✅', 'fallback-embedded': 'small built-in fallback ⚠️' }[d.source] || d.source;
+      diagDictionary.textContent = `${d.totalWords.toLocaleString()} words (${sourceLabel})`;
+    }
     testModeToggle.checked = !!state.testModeActive;
     if (state.game && state.game.wordLength) wordLengthSelect.value = String(state.game.wordLength);
     if (state.game && state.game.nextRoundDelayMs) {
@@ -352,7 +356,6 @@
   // --------------------------------------------------------------------
   // Game state rendering
   // --------------------------------------------------------------------
-  let tickerInterval = null;
   let lastRenderedRoundNumber = null;
   let lastRenderedAttemptCount = 0;
 
@@ -370,9 +373,6 @@
       roundBanner.classList.add('hidden');
       hintsRow.classList.add('hidden');
       resetKeyboard();
-      stopTicker();
-      timerText.textContent = '--';
-      timerBar.style.width = '0%';
       lastRenderedRoundNumber = null;
       lastRenderedAttemptCount = 0;
       return;
@@ -396,7 +396,6 @@
 
     renderHints(round);
     renderBanner(round);
-    startTicker(round);
   }
 
   function renderBoard(round, fullRebuild) {
@@ -518,32 +517,6 @@
       piece.style.transform = `rotate(${Math.random() * 360}deg)`;
       roundBanner.appendChild(piece);
       setTimeout(() => piece.remove(), 2200);
-    }
-  }
-
-  function startTicker(round) {
-    stopTicker();
-    tickerInterval = setInterval(() => updateTimerDisplay(round), 250);
-    updateTimerDisplay(round);
-  }
-  function stopTicker() {
-    if (tickerInterval) clearInterval(tickerInterval);
-    tickerInterval = null;
-  }
-  function updateTimerDisplay(round) {
-    if (round.status === 'active') {
-      const remainingMs = Math.max(0, round.endsAt - Date.now());
-      const totalMs = round.endsAt - round.startedAt;
-      const pct = totalMs > 0 ? Math.max(0, Math.min(100, (remainingMs / totalMs) * 100)) : 0;
-      timerBar.style.width = pct + '%';
-      timerText.textContent = `${Math.ceil(remainingMs / 1000)}s`;
-    } else if (round.nextRoundAt) {
-      const remainingMs = Math.max(0, round.nextRoundAt - Date.now());
-      timerBar.style.width = '100%';
-      timerText.textContent = `next in ${Math.ceil(remainingMs / 1000)}s`;
-      if (remainingMs <= 0) stopTicker();
-    } else {
-      timerText.textContent = '--';
     }
   }
 

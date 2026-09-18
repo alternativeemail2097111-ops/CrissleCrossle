@@ -24,7 +24,7 @@ import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 
 import { GameEngine, WORD_LENGTH_OPTIONS, NEXT_ROUND_DELAY_OPTIONS } from './game/engine.js';
-import { WORD_LISTS } from './game/words.js';
+import { loadDictionary, getLoadInfo, getWordList } from './game/dictionary.js';
 import { Diagnostics } from './game/diagnostics.js';
 import { TikTokManager } from './game/tiktok.js';
 import { TestModeSimulator } from './game/testMode.js';
@@ -78,7 +78,20 @@ const tiktok = new TikTokManager({
   },
 });
 
-const testMode = new TestModeSimulator(handleIncomingComment, () => WORD_LISTS[engine.round ? engine.round.wordLength : engine.wordLength] || []);
+// ---------------------------------------------------------------------------
+// Load the real dictionary (300,000+ words) before doing anything else.
+// This is awaited at the top level (supported by ES modules) so the server
+// never starts accepting rounds with an empty/partial word bank. If the
+// fetch fails for any reason, loadDictionary() already falls back safely
+// on its own - this just makes sure we wait for that to resolve first.
+// ---------------------------------------------------------------------------
+await loadDictionary(diagnostics);
+{
+  const info = getLoadInfo();
+  console.log(`[dictionary] Active source: ${info.source} (${info.totalWords.toLocaleString()} words)`);
+}
+
+const testMode = new TestModeSimulator(handleIncomingComment, () => getWordList(engine.round ? engine.round.wordLength : engine.wordLength));
 let testModeActive = false;
 
 // ---------------------------------------------------------------------------
@@ -121,6 +134,7 @@ function buildFullState() {
     wordLengthOptions: WORD_LENGTH_OPTIONS,
     nextRoundDelayOptions: NEXT_ROUND_DELAY_OPTIONS,
     signKeyConfigured: !!SIGN_API_KEY,
+    dictionary: getLoadInfo(),
   };
 }
 

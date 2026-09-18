@@ -157,8 +157,9 @@ You'll also see:
    Tell your viewers to type a guess **by itself**, matching that length,
    in the comments (just `APPLE`, not "I think it's apple!") — that's the
    most reliable way for the game to recognize it. Guessing is
-   unlimited — viewers can guess as many times as they want, and only
-   real dictionary words get tested and added to the board.
+   unlimited, with **no clock either** — a round simply runs until
+   someone solves it (or you skip/reveal it), and only real dictionary
+   words get tested and added to the board.
 6. Use **Hint** any time you want to help viewers along, **Skip** to
    abandon a round early, or **Reveal** to end it immediately.
 7. The next round starts automatically 3 seconds after one ends by
@@ -175,9 +176,10 @@ You'll also see:
 
 Points are deliberately small so they're easy to read at a glance on
 stream: +1 for a viewer's first valid guess each round, plus a solve bonus
-(bigger for fewer guesses, no hints used, and finishing early in the round)
-that lands roughly in the 5-25 point range. The in-game **How to Play**
-panel always shows the current rules if you want the full breakdown.
+(bigger for fewer guesses, no hints used, and solving within the first
+few guesses overall) that lands roughly in the 5-25 point range. The
+in-game **How to Play** panel always shows the current rules if you want
+the full breakdown.
 
 ### Screen-sharing this during your broadcast
 
@@ -217,6 +219,13 @@ changes without writing any:
 - **Status dot is red** → Read the message next to it; it's written in
   plain English on purpose (e.g. rate-limited, account not live, etc.).
   It will already have retried a couple of times automatically.
+- **A guess you expected to work got the "not a recognized word" note**
+  → The game loads a real ~300,000+ word dictionary from the internet the
+  moment the server starts (see "About the dictionary" below); on the
+  very rare occasion that fetch fails and there's no cached copy yet
+  either, it temporarily falls back to a much smaller built-in word list
+  until the next restart. The diagnostics panel always shows which one is
+  active.
 - **The leaderboard reset unexpectedly** → On Render's free tier, the
   server can restart after periods of inactivity, and a full redeploy
   always starts fresh. The leaderboard is saved to a small file that
@@ -229,6 +238,25 @@ changes without writing any:
   in plain terms, and the server is built to never crash from a single bad
   message, so the game keeps running for everyone else even if one thing
   goes wrong.
+
+---
+
+## About the dictionary
+
+The game doesn't ship with a giant word list baked in (it would be several
+megabytes of raw text) — instead, the moment your server starts up on
+Render, it downloads a real, comprehensive English word list (normally
+somewhere around 300,000-400,000+ usable words after removing anything
+inappropriate for a public stream) and sorts it by word length in memory.
+This takes a few seconds, once, right when the server boots.
+
+If that download ever fails (rare — would need Render itself to have a
+networking hiccup at the exact moment your server started), the game
+automatically uses a saved copy from the last successful download if one
+exists, and if not, a small ~3,500-word list bundled directly in the code
+so the game still works no matter what. None of this requires you to do
+anything — it's fully automatic, and you can always see which one is
+active in the diagnostics panel.
 
 ---
 

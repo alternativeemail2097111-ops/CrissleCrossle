@@ -21,6 +21,7 @@
     <div id="diagPanel" class="diag-panel hidden">
       <div class="diag-row"><b>Connection:</b> <span id="diagConnState">idle</span></div>
       <div class="diag-row"><b>Sign key configured:</b> <span id="diagSignKey">checking…</span></div>
+      <div class="diag-row"><b>Dictionary:</b> <span id="diagDictionary">checking…</span></div>
       <div class="diag-row"><b>Events received (all):</b> <span id="diagEvents">0</span></div>
       <div class="diag-row"><b>Accepted onto board:</b> <span id="diagRecognized">0</span></div>
       <div class="diag-row"><b>Last received:</b> <span id="diagLast">—</span></div>
@@ -47,10 +48,6 @@
     </div>
     <div class="round-meta">
       <div class="pill" id="roundPill">Round —</div>
-      <div class="timer-wrap">
-        <div class="timer-bar-bg"><div id="timerBar" class="timer-bar-fill"></div></div>
-        <span id="timerText">--</span>
-      </div>
       <button id="leaderboardBtn" class="btn btn-ghost btn-icon-label" type="button">
         <span>🏆</span><span class="btn-text">Leaderboard</span>
       </button>
@@ -261,7 +258,7 @@
       <div class="modal-section">
         <h3>Guessing &amp; hints</h3>
         <ul class="plain-list">
-          <li><b>Unlimited guesses</b> - there's no attempt limit, only a round timer.</li>
+          <li><b>Unlimited guesses, no clock</b> - a round runs until someone solves it (or the host skips/reveals it). Take your time.</li>
           <li>Only guesses that are <b>real words at this round's length</b> get tested and shown on the board - anything else shows a quick on-screen note explaining why, then gets out of the way.</li>
           <li>The host can drop a free <b>hint letter</b> any time, and one also appears automatically every few guesses.</li>
           <li>If nobody solves it before time runs out, the answer is revealed and a new round begins.</li>
@@ -272,7 +269,7 @@
         <h3>Scoring &amp; the leaderboard</h3>
         <ul class="plain-list">
           <li>+1 point just for making your first valid guess each round.</li>
-          <li>Solving it earns a bonus - bigger for fewer guesses, no hints used, and finishing early in the round.</li>
+          <li>Solving it earns a bonus - bigger for fewer guesses, no hints used, and solving within the first few guesses overall.</li>
           <li>Tap <b>🏆 Leaderboard</b> up top any time to see the full top 10 as a list - the scrolling ticker up top always shows it too.</li>
         </ul>
       </div>

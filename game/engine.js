@@ -7,15 +7,15 @@
 // TikTok viewer or from the built-in simulator.
 // ============================================================================
 
-import { WORD_LENGTH_OPTIONS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, randomWord, isKnownWord, poolSize } from './words.js';
+import { WORD_LENGTH_OPTIONS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, randomWord, isKnownWord, poolSize } from './dictionary.js';
 
 export { WORD_LENGTH_OPTIONS };
 
 const DEFAULT_WORD_LENGTH = 5;
 
-// A single, fixed pace for every round - word length is now the only thing
-// the host tunes (no more separate "difficulty" levels).
-const ROUND_SECONDS = 120;
+// A single, fixed pace for hints - word length is the only thing the host
+// tunes (no more separate "difficulty" levels). There is no round timer:
+// a round runs until it's solved, or the host skips/reveals it.
 const HINT_EVERY = 4;
 
 // How long after a round ends before the next one auto-starts. Defaults to
@@ -35,7 +35,7 @@ const SOLVE_SCORE_STEP = 1;
 const SOLVE_SCORE_MIN = 5;
 const HINT_PENALTY = 2;
 const QUICK_SOLVE_BONUS = 5;
-const QUICK_SOLVE_TIME_FRACTION = 1 / 3;
+const QUICK_SOLVE_MAX_ATTEMPTS = 3; // "quick" now means "solved within the first few guesses" - there's no clock to race anymore
 const PARTICIPATION_SCORE = 1;
 
 /**
@@ -209,9 +209,8 @@ export class GameEngine {
       solved: false,
       solvedBy: null,
       startedAt: Date.now(),
-      endsAt: Date.now() + ROUND_SECONDS * 1000,
       participants: new Set(),
-      status: 'active', // active | solved | timeout | skipped | revealed
+      status: 'active', // active | solved | skipped | revealed
       revealAnswer: null, // set when round ends
     };
     this._nextRoundAt = null;
@@ -250,17 +249,17 @@ export class GameEngine {
     hints.push({ index: idx, letter: answer[idx] });
   }
 
-  // NOTE: this fires every second but deliberately does NOT call onChange()
-  // for the common case, to avoid re-triggering a full board re-render
-  // every second (that was a real bug once - see public/app.js for how the
-  // countdown is computed independently on the client instead).
+  // NOTE: rounds no longer have a time limit - viewers can guess for as
+  // long as it takes until someone solves it (or the host skips/reveals
+  // it). This tick only exists to auto-start the next round after the
+  // host-configured delay once a round HAS ended. It deliberately does
+  // NOT call onChange() for the common case, to avoid re-triggering a
+  // full board re-render every second (that was a real bug once - see
+  // public/app.js for how any time-based UI is computed independently on
+  // the client instead).
   _tick() {
     if (!this.round) return;
-    if (this.round.status === 'active') {
-      if (Date.now() >= this.round.endsAt) {
-        this._endRound('timeout');
-      }
-    } else if (this._nextRoundAt && Date.now() >= this._nextRoundAt) {
+    if (this._nextRoundAt && Date.now() >= this._nextRoundAt) {
       this.startRound();
     }
   }
@@ -341,8 +340,7 @@ export class GameEngine {
     }
 
     if (isCorrect) {
-      const elapsedFraction = (Date.now() - this.round.startedAt) / (this.round.endsAt - this.round.startedAt);
-      const quickSolve = elapsedFraction <= QUICK_SOLVE_TIME_FRACTION;
+      const quickSolve = this.round.attempts.length <= QUICK_SOLVE_MAX_ATTEMPTS;
       const bonus = scoreForSolve(this.round.attempts.length, this.round.hints.length, quickSolve);
       this._bumpScore(username, bonus);
       const entry = this.leaderboard.get(key);
@@ -386,7 +384,6 @@ export class GameEngine {
         quickSolve: r.quickSolve,
         status: r.status,
         startedAt: r.startedAt,
-        endsAt: r.endsAt,
         revealAnswer: r.status === 'active' ? null : r.revealAnswer,
         nextRoundAt: this._nextRoundAt,
       },
